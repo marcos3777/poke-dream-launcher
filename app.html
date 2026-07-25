@@ -87,8 +87,8 @@
     const accHTML = accounts.map(s => {
       const isSel = mode === 'single' && selected === s;
       const cls = 'acc' + (isSel ? ' on' : '');
-      return '<button class="'+cls+'" data-slot="'+s+'" onclick="if(window.poke)window.poke.selectAccount('+s+')">Tela '+s
-        + '<span class="ak"><span class="reload" onclick="event.stopPropagation();if(window.poke)window.poke.reloadGame('+s+')">&#x21bb;</span></span>'
+      return '<button class="'+cls+'" data-slot="'+s+'">Tela '+s
+        + '<span class="ak"><span class="reload" data-reload="'+s+'" title="Recarregar">&#x21bb;</span></span>'
         + '</button>';
     }).join('');
 
@@ -100,12 +100,16 @@
       '<div class="side-h"><span class="t">Telas</span><span class="s">'+accounts.length+'/4</span></div>',
       '<div class="acc-list">' + accHTML + '</div>',
       focusHTML,
-      accounts.length < 4
-        ? '<button class="addacc" id="btn-add2" onclick="if(window.poke)window.poke.addView()">+ Adicionar tela</button>'
-        : '',
-      accounts.length > 0 ? '<div class="game-ctrls"><button class="gcbtn" id="btn-remove" onclick="removeLast()">✕ Fechar ultima tela</button></div>' : '',
+      accounts.length < 4 ? '<button class="addacc" data-action="add">+ Adicionar tela</button>' : '',
+      accounts.length > 0 ? '<div class="game-ctrls"><button class="gcbtn" data-action="remove">✕ Fechar ultima tela</button></div>' : '',
     ].join('');
     side.innerHTML = html;
+
+    // fiação por addEventListener (sem onclick inline no HTML)
+    side.querySelectorAll('[data-slot]').forEach(b => b.addEventListener('click', () => { if (P) P.selectAccount(+b.dataset.slot); }));
+    side.querySelectorAll('[data-reload]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); if (P) P.reloadGame(+b.dataset.reload); }));
+    const addBtn = side.querySelector('[data-action="add"]'); if (addBtn) addBtn.addEventListener('click', () => { if (P) P.addView(); });
+    const rmBtn = side.querySelector('[data-action="remove"]'); if (rmBtn) rmBtn.addEventListener('click', removeLast);
 
     // mostra/esconde botao de Grade
     if (mode === 'single') {

@@ -1,8 +1,9 @@
 'use strict';
 
-const { app, BaseWindow, WebContentsView, ipcMain } = require('electron');
+const { app, BaseWindow, WebContentsView, ipcMain, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 const GAME_URL = 'https://pokedream.com.br/';
 const GAME_DOMAIN = 'pokedream.com.br';
@@ -35,8 +36,11 @@ async function persistCookies(g) {
       const host = String(c.domain || '').replace(/^\./, '');
       if (!host) continue;
       const url = (c.secure ? 'https://' : 'http://') + host + (c.path || '/');
+      // preserva o sameSite ORIGINAL do cookie (forçar 'lax' quebrava cookies cross-site que
+      // precisam de 'no_restriction'); só cai pra 'lax' quando o valor vem indefinido.
+      const sameSite = ['no_restriction', 'lax', 'strict'].includes(c.sameSite) ? c.sameSite : 'lax';
       try {
-        await ses.cookies.set({ url, name: c.name, value: c.value, domain: c.domain, path: c.path, secure: c.secure, httpOnly: c.httpOnly, sameSite: 'lax', expirationDate: far });
+        await ses.cookies.set({ url, name: c.name, value: c.value, domain: c.domain, path: c.path, secure: c.secure, httpOnly: c.httpOnly, sameSite, expirationDate: far });
       } catch {}
     }
     await ses.cookies.flushStore();
@@ -44,21 +48,59 @@ async function persistCookies(g) {
 }
 
 // ---- backup/restore de localStorage e sessionStorage ----
-function storageFile(slot) { return path.join(storageDir, `storage-acc${slot}.json`); }
+// SEGURANÇA: o storage do jogo costuma guardar o TOKEN de login. Antes isso ia pro disco em
+// TEXTO PURO (storage-accN.json) — qualquer um que lesse o arquivo roubava a sessão. Agora
+// criptografamos com safeStorage (DPAPI no Windows / Keychain no macOS / libsecret no Linux).
+function storageFile(slot) { return path.join(storageDir, `storage-acc${slot}.bin`); }
+function legacyStorageFile(slot) { return path.join(storageDir, `storage-acc${slot}.json`); }
+
+function writeStorageEncrypted(slot, json) {
+  try {
+    const buf = safeStorage.isEncryptionAvailable()
+      ? safeStorage.encryptString(json)                 // criptografado pelo SO
+      : Buffer.from('PLAIN:' + json, 'utf8');           // fallback raro (SO sem cripto disponível)
+    fs.writeFileSync(storageFile(slot), buf);
+  } catch {}
+}
+function readStorageDecrypted(slot) {
+  // formato novo (.bin criptografado)
+  try {
+    if (fs.existsSync(storageFile(slot))) {
+      const buf = fs.readFileSync(storageFile(slot));
+      const json = buf.slice(0, 6).toString('utf8') === 'PLAIN:' ? buf.slice(6).toString('utf8') : safeStorage.decryptString(buf);
+      return JSON.parse(json);
+    }
+  } catch {}
+  // migração: lê o .json antigo (texto puro), re-salva criptografado e apaga o antigo
+  try {
+    const old = legacyStorageFile(slot);
+    if (fs.existsSync(old)) {
+      const raw = fs.readFileSync(old, 'utf8');
+      writeStorageEncrypted(slot, raw);
+      try { fs.unlinkSync(old); } catch {}
+      return JSON.parse(raw);
+    }
+  } catch {}
+  return null;
+}
 
 async function saveStorage(g) {
   try {
     const wc = g.view.webContents;
+    if (!wc || wc.isDestroyed()) return;
     const data = await wc.executeJavaScript('({ls:JSON.parse(JSON.stringify(localStorage)),ss:JSON.parse(JSON.stringify(sessionStorage))})', true);
-    fs.writeFileSync(storageFile(g.slot), JSON.stringify(data), 'utf8');
+    const json = JSON.stringify(data);
+    const hash = crypto.createHash('sha1').update(json).digest('hex');
+    if (g._storageHash === hash) return;   // nada mudou desde o último save → não regrava (economiza I/O)
+    g._storageHash = hash;
+    writeStorageEncrypted(g.slot, json);
   } catch {}
 }
 
 async function restoreStorage(g) {
-  const f = storageFile(g.slot);
-  if (!fs.existsSync(f)) return;
+  const data = readStorageDecrypted(g.slot);
+  if (!data) return;
   try {
-    const data = JSON.parse(fs.readFileSync(f, 'utf8'));
     const wc = g.view.webContents;
     if (data.ls) {
       await wc.executeJavaScript(`Object.entries(${JSON.stringify(data.ls)}).forEach(function(e){try{localStorage.setItem(e[0],e[1])}catch(_){}})`, true);
@@ -122,16 +164,21 @@ function createGame(slot) {
       backgroundThrottling: false,
     },
   });
-  const g = { view, slot, _shown: false };
+  const g = { view, slot, _shown: false, _persistTimer: null };
 
-  view.webContents.on('did-finish-load', async () => {
-    // restaura storage salvo antes do jogo iniciar
-    await restoreStorage(g);
-    // espera o login acontecer, depois converte cookies de sessao em persistentes
-    setTimeout(async () => { await persistCookies(g); await saveStorage(g); }, 6000);
-    // salva o storage a cada 30s enquanto a conta estiver aberta
-    g._saveInterval = setInterval(() => { saveStorage(g).catch(() => {}); }, 30000);
-  });
+  // persiste cookies+storage de forma DEBOUNCED (agrupa rajadas de navegação num único save)
+  const persistSoon = () => {
+    if (g._persistTimer) clearTimeout(g._persistTimer);
+    g._persistTimer = setTimeout(() => { persistCookies(g).catch(() => {}); saveStorage(g).catch(() => {}); }, 1200);
+  };
+
+  view.webContents.on('did-finish-load', () => { restoreStorage(g).catch(() => {}); });
+  // REAGE ao login em vez de chutar 6s: o login normalmente dispara uma navegação (redirect) —
+  // aí convertemos os cookies de sessão em persistentes na hora certa.
+  view.webContents.on('did-navigate', persistSoon);
+  view.webContents.on('did-navigate-in-page', persistSoon);
+  // rede de segurança periódica (o saveStorage só grava de fato quando algo mudou)
+  g._saveInterval = setInterval(() => { persistCookies(g).catch(() => {}); saveStorage(g).catch(() => {}); }, 30000);
 
   view.webContents.loadURL(GAME_URL).catch(e => console.error('[launcher] loadURL', slot, e && e.message));
   win.contentView.addChildView(view);
@@ -154,6 +201,7 @@ function removeGame(slot) {
   if (i < 0) return activeSlots();
   const g = games[i];
   if (g._saveInterval) clearInterval(g._saveInterval);
+  if (g._persistTimer) clearTimeout(g._persistTimer);
   saveStorage(g).catch(() => {});   // salva antes de fechar
   try { win.contentView.removeChildView(g.view); } catch {}
   games.splice(i, 1);
