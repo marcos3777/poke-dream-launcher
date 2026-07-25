@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>PokeDream Launcher</title>
+<style>
+  :root{
+    --bg:#0a0d13; --panel:#111621; --panel2:#161c2a;
+    --line:#1f2734; --line2:#2c3648;
+    --txt:#e7e9ef; --mut:#8791a4; --gold:#ffce56; --good:#3fca74; --warn:#ffb151;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; }
+  body{ background:var(--bg); color:var(--txt); font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
+    font-size:13px; -webkit-font-smoothing:antialiased; color-scheme:dark; overflow:hidden; }
+  .app{ display:flex; flex-direction:column; height:100vh; }
+  button{ font-family:inherit; cursor:pointer; }
+
+  .bar{ height:46px; flex:0 0 46px; display:flex; align-items:center; gap:10px; padding:0 8px 0 14px;
+    background:var(--panel); border-bottom:1px solid var(--line); -webkit-app-region:drag; z-index:20; }
+  .brand{ display:flex; align-items:center; gap:8px; font-weight:800; letter-spacing:.3px; font-size:13px; }
+  .brand .logo{ width:16px; height:16px; border-radius:50%;
+    background:radial-gradient(circle at 50% 33%, #fff 0 25%, #ee4b4b 26% 48%, #17171a 49% 55%, #dcdcdc 56%); box-shadow:0 0 0 1.5px #17171a inset; }
+  .brand b{ color:var(--gold); }
+  .bar .sp{ flex:1; }
+  .bar button{ -webkit-app-region:no-drag; }
+  .tbtn{ height:30px; padding:0 11px; display:flex; align-items:center; gap:6px; border-radius:8px;
+    border:1px solid var(--line2); background:var(--panel2); color:var(--txt); font-size:12px; }
+  .tbtn:hover{ background:#1a2231; } .tbtn.on{ border-color:var(--gold); color:var(--gold); }
+  .ico{ width:32px; height:30px; border:1px solid var(--line); background:transparent; color:var(--mut); border-radius:8px; font-size:14px; }
+  .ico:hover{ background:#1a2231; color:var(--txt); } .ico.cl:hover{ background:#7a2130; color:#fff; }
+
+  .body{ display:flex; flex:1; min-height:0; }
+  .side{ flex:0 0 220px; border-right:1px solid var(--line); background:#0d121b; padding:12px 10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; }
+  .side-h{ display:flex; align-items:baseline; justify-content:space-between; padding:2px 4px 6px; }
+  .side-h .t{ font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--mut); font-weight:700; }
+  .side-h .s{ font-size:10.5px; color:#5a6478; }
+  .acc-list{ display:flex; flex-direction:column; gap:8px; margin-top:4px; flex:1 1 auto; overflow-y:auto; }
+  .acc{ display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:10px;
+    border:1px solid var(--line); background:var(--panel); color:var(--txt); cursor:pointer; text-align:left;
+    font-size:12.5px; font-weight:700; width:100%; transition:border-color .15s,background .15s; }
+  .acc:hover{ background:#1a2231; } .acc.on{ border-color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset; background:#1a1e0b; }
+  .acc .ak{ margin-left:auto; font-size:10px; color:var(--mut); font-weight:400; display:flex; gap:8px; align-items:center; }
+  .acc .ak .reload{ padding:3px 7px; border-radius:6px; border:1px solid var(--line2); background:var(--panel2); color:var(--mut); font-size:10px; }
+  .acc .ak .reload:hover{ color:var(--warn); border-color:var(--warn); }
+  .acc .ak .reload:active{ transform:scale(.95); }
+  .addacc{ margin-top:6px; padding:9px; border-radius:9px; border:1px dashed var(--line2);
+    background:transparent; color:var(--mut); font-size:12px; width:100%; }
+  .addacc:hover{ color:var(--gold); border-color:var(--gold); }
+  .gcbtn{ background:var(--panel2); border:1px solid var(--line); color:var(--txt); border-radius:7px; padding:5px 8px; font-size:10.5px; cursor:pointer; width:100%; text-align:center; }
+  .gcbtn:hover{ background:#1a2231; border-color:var(--line2); }
+  .game-ctrls{ display:flex; flex-direction:column; gap:5px; margin:2px 0 8px; }
+  .focus-info{ font-size:10.5px; color:var(--good); padding:6px 8px; border-radius:7px; background:#132216; border:1px solid #1f3a27; margin-top:4px; line-height:1.4; }
+  .focus-info b{ color:var(--gold); }
+
+  .main{ flex:1; min-width:0; padding:12px; display:flex; align-items:center; justify-content:center; }
+  .empty{ color:var(--mut); font-size:13px; text-align:center; }
+  .empty b{ color:var(--gold); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="bar">
+    <span class="brand"><span class="logo"></span>POKEDREAM <b>LAUNCHER</b></span>
+    <span class="sp"></span>
+    <button class="tbtn" id="btn-grid" style="display:none">▦ Grade</button>
+    <button class="tbtn" id="btn-add">+ Adicionar tela</button>
+    <button class="ico" id="btn-min">—</button>
+    <button class="ico" id="btn-max">□</button>
+    <button class="ico cl" id="btn-close">✕</button>
+  </div>
+  <div class="body">
+    <aside class="side" id="side"></aside>
+    <main class="main" id="main"></main>
+  </div>
+</div>
+<script>
+  const P = window.poke || null;
+  let accounts = [];
+  let selected = null;
+  let mode = 'grid';
+
+  function renderSidebar() {
+    const side = document.getElementById('side');
+    const btnGrid = document.getElementById('btn-grid');
+
+    const accHTML = accounts.map(s => {
+      const isSel = mode === 'single' && selected === s;
+      const cls = 'acc' + (isSel ? ' on' : '');
+      return '<button class="'+cls+'" data-slot="'+s+'" onclick="if(window.poke)window.poke.selectAccount('+s+')">Tela '+s
+        + '<span class="ak"><span class="reload" onclick="event.stopPropagation();if(window.poke)window.poke.reloadGame('+s+')">&#x21bb;</span></span>'
+        + '</button>';
+    }).join('');
+
+    const focusHTML = mode === 'single' && selected
+      ? '<div class="focus-info">&#x1f50d; Foco na <b>Tela '+selected+'</b><br>Clique nela de novo ou em "Grade" para voltar ao grid.</div>'
+      : '';
+
+    const html = [
+      '<div class="side-h"><span class="t">Telas</span><span class="s">'+accounts.length+'/4</span></div>',
+      '<div class="acc-list">' + accHTML + '</div>',
+      focusHTML,
+      accounts.length < 4
+        ? '<button class="addacc" id="btn-add2" onclick="if(window.poke)window.poke.addView()">+ Adicionar tela</button>'
+        : '',
+      accounts.length > 0 ? '<div class="game-ctrls"><button class="gcbtn" id="btn-remove" onclick="removeLast()">✕ Fechar ultima tela</button></div>' : '',
+    ].join('');
+    side.innerHTML = html;
+
+    // mostra/esconde botao de Grade
+    if (mode === 'single') {
+      btnGrid.style.display = '';
+      btnGrid.classList.add('on');
+    } else {
+      btnGrid.style.display = 'none';
+      btnGrid.classList.remove('on');
+    }
+
+    document.getElementById('main').innerHTML = accounts.length
+      ? ''
+      : '<div class="empty">Nenhuma tela aberta.<br>Clique em <b>+ Adicionar tela</b> para começar.</div>';
+  }
+
+  if (P) {
+    P.onAccounts(function(payload) {
+      accounts = (payload && payload.slots) ? payload.slots : [];
+      selected = (payload && payload.selected) ? payload.selected : null;
+      mode = (payload && payload.mode) ? payload.mode : 'grid';
+      renderSidebar();
+    });
+  }
+
+  document.getElementById('btn-add').onclick = function() { if (P) P.addView(); };
+  document.getElementById('btn-grid').onclick = function() { if (P) P.setGameMode('grid'); };
+  document.getElementById('btn-min').onclick = function() { if (P) P.winMinimize(); };
+  document.getElementById('btn-max').onclick = function() { if (P) P.winMaximize(); };
+  document.getElementById('btn-close').onclick = function() { if (P) P.winClose(); };
+
+  renderSidebar();
+
+  function removeLast() {
+    if (accounts.length > 0 && P) P.removeView(accounts[accounts.length - 1]);
+  }
+</script>
+</body>
+</html>
