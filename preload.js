@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('poke', {
   winMinimize: () => ipcRenderer.invoke('winMinimize'),
   winMaximize: () => ipcRenderer.invoke('winMaximize'),
   winClose: () => ipcRenderer.invoke('winClose'),
+  toggleConfig: () => ipcRenderer.invoke('toggleConfig'),
+  closeConfig: () => ipcRenderer.invoke('closeConfig'),
   getVersion: () => ipcRenderer.invoke('getVersion'),
   checkForUpdate: () => ipcRenderer.invoke('checkForUpdate'),
   installUpdate: () => ipcRenderer.invoke('installUpdate'),

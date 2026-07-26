@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>Config</title>
+<style>
+  :root{ --bg:#111621; --panel2:#161c2a; --line:#1f2734; --line2:#2c3648; --txt:#e7e9ef; --mut:#8791a4; --gold:#ffce56; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; }
+  body{ background:var(--bg); color:var(--txt); font-family:"Segoe UI",system-ui,-apple-system,sans-serif; font-size:12.5px;
+    color-scheme:dark; padding:12px; border:1px solid var(--line2); border-radius:12px; overflow:hidden; }
+  button{ font-family:inherit; cursor:pointer; }
+  .h{ display:flex; align-items:center; margin-bottom:10px; }
+  .h .t{ font-weight:800; font-size:13px; }
+  .h .x{ margin-left:auto; width:26px; height:24px; border-radius:7px; border:1px solid var(--line2); background:transparent; color:var(--mut); font-size:13px; }
+  .h .x:hover{ color:#fff; background:#7a2130; border-color:#7a2130; }
+  .row{ color:var(--mut); margin-bottom:11px; } .row b{ color:var(--txt); }
+  .btn{ width:100%; height:31px; border-radius:8px; border:1px solid var(--line2); background:var(--panel2); color:var(--txt); font-size:12px; margin-bottom:8px; }
+  .btn:hover{ background:#1a2231; } .btn.on{ border-color:var(--gold); color:var(--gold); }
+  .status{ font-size:11px; color:var(--mut); min-height:16px; line-height:1.45; }
+</style>
+</head>
+<body>
+  <div class="h"><span class="t">⚙ Configuracoes</span><button class="x" id="x" title="Fechar">✕</button></div>
+  <div class="row">Versao instalada: <b id="ver">—</b></div>
+  <button class="btn" id="check">🔄 Verificar atualizacao</button>
+  <button class="btn on" id="install" style="display:none">↻ Reiniciar e instalar</button>
+  <div class="status" id="status"></div>
+<script>
+  const P = window.poke || null;
+  const statusEl = document.getElementById('status');
+  const install = document.getElementById('install');
+  function setStatus(t){ statusEl.textContent = t || ''; }
+
+  document.getElementById('x').onclick = function(){ if (P && P.closeConfig) P.closeConfig(); };
+  if (P && P.getVersion) P.getVersion().then(function(v){ document.getElementById('ver').textContent = v; });
+
+  document.getElementById('check').onclick = function(){
+    if (!P || !P.checkForUpdate) return;
+    install.style.display = 'none';
+    setStatus('Verificando atualizacao…');
+    P.checkForUpdate();
+  };
+  install.onclick = function(){ if (P && P.installUpdate) P.installUpdate(); };
+
+  if (P && P.onUpdateStatus) P.onUpdateStatus(function(s){
+    if (!s) return;
+    if (s.state === 'checking') setStatus('Verificando atualizacao…');
+    else if (s.state === 'none') { setStatus('✅ Voce ja esta na versao mais recente.'); install.style.display = 'none'; }
+    else if (s.state === 'available') setStatus('Versao ' + (s.version || '') + ' encontrada — baixando…');
+    else if (s.state === 'downloading') setStatus('Baixando atualizacao… ' + (s.percent || 0) + '%');
+    else if (s.state === 'downloaded') { setStatus('✅ Versao ' + (s.version || '') + ' baixada!'); install.style.display = 'block'; }
+    else if (s.state === 'error') { setStatus('❌ ' + (s.message || 'erro ao verificar')); install.style.display = 'none'; }
+  });
+</script>
+</body>
+</html>

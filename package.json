@@ -36,7 +36,8 @@
     "files": [
       "main.js",
       "preload.js",
-      "app.html"
+      "app.html",
+      "config.html"
     ],
     "win": {
       "target": "nsis",

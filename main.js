@@ -22,6 +22,8 @@ const games = [];
 let selectedSlot = null;
 let gameMode = 'grid';
 let storageDir = null;
+let cfgView = null;      // overlay do menu de config (view própria, por cima das telas do jogo)
+let cfgOpen = false;
 
 function activeSlots() { return games.map(g => g.slot); }
 function nextFreeSlot() { for (let s = 1; s <= MAXV; s++) if (!activeSlots().includes(s)) return s; return null; }
@@ -152,6 +154,34 @@ function layout() {
     if (r) { setViewBounds(g.view, r); if (!g._shown) { g.view.setVisible(true); g._shown = true; } }
     else if (g._shown) { g.view.setVisible(false); g._shown = false; }
   });
+
+  if (cfgOpen) positionCfg();   // mantém o menu de config no canto ao redimensionar
+}
+
+// posiciona o overlay de config no canto superior direito (sobre a area do jogo)
+function positionCfg() {
+  if (!win || !cfgView) return;
+  const b = win.getContentBounds();
+  const W = 300, H = 250;
+  const width = Math.min(W, Math.max(b.width - SIDE_W - 12, 180));
+  const height = Math.min(H, Math.max(b.height - BAR - 14, 140));
+  const x = Math.max(b.width - width - 10, SIDE_W + 4);
+  setViewBounds(cfgView, { x, y: BAR + 6, width, height });
+}
+
+// abre/fecha o menu de config (traz a view pro TOPO da ordem z, por cima das telas do jogo)
+function setConfigOpen(open) {
+  if (!cfgView) return cfgOpen;
+  cfgOpen = !!open;
+  if (cfgOpen) {
+    try { win.contentView.addChildView(cfgView); } catch {}   // re-adiciona = vai pro topo
+    positionCfg();
+    cfgView.setVisible(true);
+    try { cfgView.webContents.focus(); } catch {}
+  } else {
+    cfgView.setVisible(false);
+  }
+  return cfgOpen;
 }
 
 // ---- criar/fechar telas ----
@@ -258,6 +288,15 @@ function createWindow() {
   win.contentView.addChildView(dashView);
   dashView.webContents.loadFile(path.join(__dirname, 'app.html'));
 
+  // overlay do menu de config: view PRÓPRIA, fica por cima das telas do jogo (o jogo continua visível atrás)
+  cfgView = new WebContentsView({
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true },
+  });
+  try { cfgView.setBackgroundColor('#111621'); } catch {}
+  win.contentView.addChildView(cfgView);
+  cfgView.setVisible(false);
+  cfgView.webContents.loadFile(path.join(__dirname, 'config.html'));
+
   win.on('resize', () => layout());
   win.on('closed', () => {
     // salva o storage de todas as telas antes de fechar
@@ -300,6 +339,8 @@ ipcMain.handle('setGameMode', async (_e, mode) => {
 ipcMain.handle('winMinimize', async () => { if (win) win.minimize(); });
 ipcMain.handle('winMaximize', async () => { if (win) win.isMaximized() ? win.unmaximize() : win.maximize(); });
 ipcMain.handle('winClose', async () => { app.quit(); });
+ipcMain.handle('toggleConfig', () => setConfigOpen(!cfgOpen));
+ipcMain.handle('closeConfig', () => setConfigOpen(false));
 
 // ---- auto-update (via GitHub Releases) ----
 ipcMain.handle('getVersion', () => app.getVersion());
@@ -311,8 +352,8 @@ ipcMain.handle('installUpdate', () => { try { autoUpdater.quitAndInstall(); } ca
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
-// avisa a UI do andamento da atualização (para o painel de config mostrar o status)
-function sendUpdate(state, extra) { send(dashView, 'update-status', Object.assign({ state }, extra || {})); }
+// avisa a UI do andamento da atualização (o menu de config mostra o status)
+function sendUpdate(state, extra) { send(cfgView, 'update-status', Object.assign({ state }, extra || {})); }
 
 // Ao abrir, checa se há versão nova no repo; baixa em segundo plano; a UI/config mostra o progresso
 // e oferece "reiniciar e instalar". (No `npm start` de dev o autoUpdater nem tenta.)
