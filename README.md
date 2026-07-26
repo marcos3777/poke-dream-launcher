@@ -13,9 +13,29 @@ Navegador multitela leve (Electron) para [PokeDream](https://pokedream.com.br/).
 
 ---
 
-## 📖 Tutorial passo a passo (pra quem NAO programa)
+## ⬇ Baixar (Windows) — o jeito mais facil
 
-Nao precisa saber nada de programacao. E so seguir na ordem. **Voce so faz os passos 1 e 2 uma unica vez.** (Instrucoes para **Windows**.)
+**Nao precisa instalar nada nem saber programar.**
+
+### 👉 [Clique aqui para baixar (.zip)](https://github.com/marcos3777/poke-dream-launcher/releases/latest/download/Poke-Dream-Launcher-Windows-Portable.zip)
+
+1. Baixe o arquivo `.zip` no link acima.
+2. Clique com o **botao direito** no zip baixado → **Extrair tudo**.
+3. Abra a pasta extraida e de **dois cliques** em **`Poke Dream Launcher.exe`**.
+
+Pronto! Clique em **+ Adicionar tela** e faca login no PokeDream.
+
+> ⚠️ Na primeira vez o Windows pode mostrar um aviso azul (SmartScreen), porque o app nao tem assinatura digital paga. E so clicar em **Mais informacoes → Executar assim mesmo**. E seguro — todo o codigo esta aqui no repositorio.
+
+Todas as versoes ficam em **[Releases](https://github.com/marcos3777/poke-dream-launcher/releases)**.
+
+---
+
+## 📖 Alternativa: rodar pelo codigo (Linux/Mac ou quem quer o codigo-fonte)
+
+> Se voce ja baixou o `.zip` acima, **pode pular esta parte** — ela e so pra quem prefere rodar direto do codigo.
+
+Nao precisa saber programar. E so seguir na ordem. **Voce so faz os passos 1 e 2 uma unica vez.** (Instrucoes para **Windows**; em Linux/Mac os comandos `npm` sao os mesmos.)
 
 ### Passo 1 — Instalar o Node.js (uma vez so)
 
