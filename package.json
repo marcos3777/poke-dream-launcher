@@ -1,16 +1,20 @@
 {
   "name": "poke-dream-launcher",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Navegador leve (Electron) para PokeDream — abre ate 4 telas",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "check": "node --check main.js && node --check preload.js",
     "dist": "electron-builder --win nsis --publish never",
+    "release": "electron-builder --win nsis --publish always",
     "dist:linux": "electron-builder --linux AppImage --publish never"
   },
   "author": "",
   "license": "MIT",
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
   "devDependencies": {
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8"
@@ -21,6 +25,14 @@
     "directories": {
       "output": "dist"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "marcos3777",
+        "repo": "poke-dream-launcher",
+        "releaseType": "release"
+      }
+    ],
     "files": [
       "main.js",
       "preload.js",

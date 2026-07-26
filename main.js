@@ -4,6 +4,7 @@ const { app, BaseWindow, WebContentsView, ipcMain, safeStorage } = require('elec
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { autoUpdater } = require('electron-updater');
 
 const GAME_URL = 'https://pokedream.com.br/';
 const GAME_DOMAIN = 'pokedream.com.br';
@@ -164,7 +165,8 @@ function createGame(slot) {
       backgroundThrottling: false,
     },
   });
-  const g = { view, slot, _shown: false, _persistTimer: null };
+  const g = { view, slot, _shown: false, _persistTimer: null, _restored: false, _loopGuard: false, _loads: [] };
+  const wc = view.webContents;
 
   // persiste cookies+storage de forma DEBOUNCED (agrupa rajadas de navegação num único save)
   const persistSoon = () => {
@@ -172,15 +174,30 @@ function createGame(slot) {
     g._persistTimer = setTimeout(() => { persistCookies(g).catch(() => {}); saveStorage(g).catch(() => {}); }, 1200);
   };
 
-  view.webContents.on('did-finish-load', () => { restoreStorage(g).catch(() => {}); });
-  // REAGE ao login em vez de chutar 6s: o login normalmente dispara uma navegação (redirect) —
-  // aí convertemos os cookies de sessão em persistentes na hora certa.
-  view.webContents.on('did-navigate', persistSoon);
-  view.webContents.on('did-navigate-in-page', persistSoon);
-  // rede de segurança periódica (o saveStorage só grava de fato quando algo mudou)
-  g._saveInterval = setInterval(() => { persistCookies(g).catch(() => {}); saveStorage(g).catch(() => {}); }, 30000);
+  wc.on('did-navigate', persistSoon);
+  wc.on('did-navigate-in-page', persistSoon);
 
-  view.webContents.loadURL(GAME_URL).catch(e => console.error('[launcher] loadURL', slot, e && e.message));
+  wc.on('did-finish-load', () => {
+    const now = Date.now();
+    g._loads = g._loads.filter(t => now - t < 12000); g._loads.push(now);
+
+    // DETECTOR DE LOOP: 5+ carregamentos em 12s = a pagina esta recarregando sozinha.
+    // Suspeito nº1 e a injecao de storage do restoreStorage -> paramos de injetar pra quebrar o ciclo.
+    if (g._loads.length >= 5) {
+      if (!g._loopGuard) { g._loopGuard = true; console.warn(`[launcher] acc${slot}: loop de reload detectado — restauracao de storage suspensa pra quebrar o ciclo`); }
+      return;
+    }
+    if (g._loopGuard) return;
+    // restaura o storage UMA VEZ so (se injetar a cada load e o jogo reagir recarregando, vira loop)
+    if (g._restored) return;
+    g._restored = true;
+    restoreStorage(g).catch(() => {});
+  });
+
+  // rede de segurança periódica (o saveStorage só grava de fato quando algo mudou)
+  g._saveInterval = setInterval(() => { if (!g._loopGuard) { persistCookies(g).catch(() => {}); saveStorage(g).catch(() => {}); } }, 30000);
+
+  wc.loadURL(GAME_URL).catch(e => console.error('[launcher] loadURL', slot, e && e.message));
   win.contentView.addChildView(view);
   view.setVisible(false);
   games.push(g);
@@ -286,8 +303,24 @@ ipcMain.handle('winClose', async () => { app.quit(); });
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
+// ---- auto-update (via GitHub Releases) ----
+// Ao abrir, checa se há versão nova no repo; baixa em segundo plano e instala ao fechar o app.
+// Só roda no app EMPACOTADO (no `npm start` de dev o autoUpdater nem tenta).
+function setupAutoUpdate() {
+  if (!app.isPackaged) return;
+  try {
+    autoUpdater.autoDownload = true;
+    autoUpdater.on('error', (e) => console.error('[updater] erro:', e && e.message));
+    autoUpdater.on('update-available', (i) => console.log('[updater] versão nova disponível:', i && i.version));
+    autoUpdater.on('update-not-available', () => console.log('[updater] já está na versão mais recente'));
+    autoUpdater.on('update-downloaded', (i) => console.log('[updater] update baixado, será instalado ao fechar:', i && i.version));
+    autoUpdater.checkForUpdatesAndNotify();
+  } catch (e) { console.error('[updater] falha ao iniciar:', e && e.message); }
+}
+
 app.whenReady().then(() => {
   createWindow();
+  setupAutoUpdate();
   app.on('activate', () => { if (BaseWindow.getAllWindows().length === 0) createWindow(); });
 });
 
