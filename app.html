@@ -22,6 +22,12 @@
   .brand .logo{ width:16px; height:16px; border-radius:50%;
     background:radial-gradient(circle at 50% 33%, #fff 0 25%, #ee4b4b 26% 48%, #17171a 49% 55%, #dcdcdc 56%); box-shadow:0 0 0 1.5px #17171a inset; }
   .brand b{ color:var(--gold); }
+  .ver{ font-size:10.5px; font-weight:700; color:var(--mut); background:var(--panel2); border:1px solid var(--line2); padding:1px 7px; border-radius:8px; letter-spacing:0; }
+  .cfg-pop{ position:absolute; top:50px; right:10px; width:270px; z-index:50; background:var(--panel); border:1px solid var(--line2); border-radius:12px; padding:12px; box-shadow:0 12px 30px rgba(0,0,0,.45); -webkit-app-region:no-drag; }
+  .cfg-h{ font-size:12px; font-weight:800; margin-bottom:8px; color:var(--txt); }
+  .cfg-row{ font-size:11.5px; color:var(--mut); margin-bottom:10px; } .cfg-row b{ color:var(--txt); }
+  .cfg-pop .tbtn{ width:100%; justify-content:center; margin-bottom:8px; }
+  .cfg-status{ font-size:11px; color:var(--mut); min-height:16px; line-height:1.4; }
   .bar .sp{ flex:1; }
   .bar button{ -webkit-app-region:no-drag; }
   .tbtn{ height:30px; padding:0 11px; display:flex; align-items:center; gap:6px; border-radius:8px;
@@ -61,10 +67,11 @@
 <body>
 <div class="app">
   <div class="bar">
-    <span class="brand"><span class="logo"></span>POKEDREAM <b>LAUNCHER</b></span>
+    <span class="brand"><span class="logo"></span>POKEDREAM <b>LAUNCHER</b> <span class="ver" id="app-ver">…</span></span>
     <span class="sp"></span>
     <button class="tbtn" id="btn-grid" style="display:none">▦ Grade</button>
     <button class="tbtn" id="btn-add">+ Adicionar tela</button>
+    <button class="ico" id="btn-cfg" title="Configuracoes / Atualizacao">⚙</button>
     <button class="ico" id="btn-min">—</button>
     <button class="ico" id="btn-max">□</button>
     <button class="ico cl" id="btn-close">✕</button>
@@ -73,6 +80,13 @@
     <aside class="side" id="side"></aside>
     <main class="main" id="main"></main>
   </div>
+</div>
+<div id="cfg" class="cfg-pop" style="display:none">
+  <div class="cfg-h">⚙ Configuracoes</div>
+  <div class="cfg-row">Versao instalada: <b id="cfg-ver">—</b></div>
+  <button class="tbtn" id="cfg-check">🔄 Verificar atualizacao</button>
+  <button class="tbtn on" id="cfg-install" style="display:none">↻ Reiniciar e instalar</button>
+  <div class="cfg-status" id="cfg-status"></div>
 </div>
 <script>
   const P = window.poke || null;
@@ -139,6 +153,38 @@
   document.getElementById('btn-min').onclick = function() { if (P) P.winMinimize(); };
   document.getElementById('btn-max').onclick = function() { if (P) P.winMaximize(); };
   document.getElementById('btn-close').onclick = function() { if (P) P.winClose(); };
+
+  // ---- versao + config/atualizacao ----
+  var cfg = document.getElementById('cfg');
+  var cfgStatus = document.getElementById('cfg-status');
+  var cfgInstall = document.getElementById('cfg-install');
+  function setStatus(t) { cfgStatus.textContent = t || ''; }
+
+  if (P && P.getVersion) P.getVersion().then(function(v) {
+    document.getElementById('app-ver').textContent = 'v' + v;
+    document.getElementById('cfg-ver').textContent = v;
+  });
+
+  document.getElementById('btn-cfg').onclick = function() {
+    cfg.style.display = (cfg.style.display === 'none') ? 'block' : 'none';
+  };
+  document.getElementById('cfg-check').onclick = function() {
+    if (!P || !P.checkForUpdate) return;
+    cfgInstall.style.display = 'none';
+    setStatus('Verificando atualizacao…');
+    P.checkForUpdate();
+  };
+  cfgInstall.onclick = function() { if (P && P.installUpdate) P.installUpdate(); };
+
+  if (P && P.onUpdateStatus) P.onUpdateStatus(function(s) {
+    if (!s) return;
+    if (s.state === 'checking') setStatus('Verificando atualizacao…');
+    else if (s.state === 'none') { setStatus('✅ Voce ja esta na versao mais recente.'); cfgInstall.style.display = 'none'; }
+    else if (s.state === 'available') setStatus('Versao ' + (s.version || '') + ' encontrada — baixando…');
+    else if (s.state === 'downloading') setStatus('Baixando atualizacao… ' + (s.percent || 0) + '%');
+    else if (s.state === 'downloaded') { setStatus('✅ Versao ' + (s.version || '') + ' baixada! Clique para reiniciar e instalar.'); cfgInstall.style.display = 'block'; cfg.style.display = 'block'; }
+    else if (s.state === 'error') { setStatus('❌ ' + (s.message || 'erro ao verificar')); cfgInstall.style.display = 'none'; }
+  });
 
   renderSidebar();
 

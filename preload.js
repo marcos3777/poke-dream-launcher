@@ -11,9 +11,17 @@ contextBridge.exposeInMainWorld('poke', {
   winMinimize: () => ipcRenderer.invoke('winMinimize'),
   winMaximize: () => ipcRenderer.invoke('winMaximize'),
   winClose: () => ipcRenderer.invoke('winClose'),
+  getVersion: () => ipcRenderer.invoke('getVersion'),
+  checkForUpdate: () => ipcRenderer.invoke('checkForUpdate'),
+  installUpdate: () => ipcRenderer.invoke('installUpdate'),
   onAccounts: (cb) => {
     const h = (_e, payload) => { try { cb(payload); } catch {} };
     ipcRenderer.on('accounts', h);
     return () => ipcRenderer.removeListener('accounts', h);
+  },
+  onUpdateStatus: (cb) => {
+    const h = (_e, payload) => { try { cb(payload); } catch {} };
+    ipcRenderer.on('update-status', h);
+    return () => ipcRenderer.removeListener('update-status', h);
   },
 });

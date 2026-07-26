@@ -301,26 +301,38 @@ ipcMain.handle('winMinimize', async () => { if (win) win.minimize(); });
 ipcMain.handle('winMaximize', async () => { if (win) win.isMaximized() ? win.unmaximize() : win.maximize(); });
 ipcMain.handle('winClose', async () => { app.quit(); });
 
+// ---- auto-update (via GitHub Releases) ----
+ipcMain.handle('getVersion', () => app.getVersion());
+ipcMain.handle('checkForUpdate', () => {
+  if (!app.isPackaged) { sendUpdate('error', { message: 'atualização só funciona no app instalado (não no npm start)' }); return; }
+  try { autoUpdater.checkForUpdates(); } catch (e) { sendUpdate('error', { message: e && e.message }); }
+});
+ipcMain.handle('installUpdate', () => { try { autoUpdater.quitAndInstall(); } catch (e) { console.error('[updater] quitAndInstall', e && e.message); } });
+
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
-// ---- auto-update (via GitHub Releases) ----
-// Ao abrir, checa se há versão nova no repo; baixa em segundo plano e instala ao fechar o app.
-// Só roda no app EMPACOTADO (no `npm start` de dev o autoUpdater nem tenta).
+// avisa a UI do andamento da atualização (para o painel de config mostrar o status)
+function sendUpdate(state, extra) { send(dashView, 'update-status', Object.assign({ state }, extra || {})); }
+
+// Ao abrir, checa se há versão nova no repo; baixa em segundo plano; a UI/config mostra o progresso
+// e oferece "reiniciar e instalar". (No `npm start` de dev o autoUpdater nem tenta.)
 function setupAutoUpdate() {
-  if (!app.isPackaged) return;
   try {
     autoUpdater.autoDownload = true;
-    autoUpdater.on('error', (e) => console.error('[updater] erro:', e && e.message));
-    autoUpdater.on('update-available', (i) => console.log('[updater] versão nova disponível:', i && i.version));
-    autoUpdater.on('update-not-available', () => console.log('[updater] já está na versão mais recente'));
-    autoUpdater.on('update-downloaded', (i) => console.log('[updater] update baixado, será instalado ao fechar:', i && i.version));
-    autoUpdater.checkForUpdatesAndNotify();
+    autoUpdater.on('checking-for-update', () => sendUpdate('checking'));
+    autoUpdater.on('update-available', (i) => sendUpdate('available', { version: i && i.version }));
+    autoUpdater.on('update-not-available', () => sendUpdate('none'));
+    autoUpdater.on('download-progress', (p) => sendUpdate('downloading', { percent: Math.round(p && p.percent || 0) }));
+    autoUpdater.on('update-downloaded', (i) => sendUpdate('downloaded', { version: i && i.version }));
+    autoUpdater.on('error', (e) => sendUpdate('error', { message: e && e.message }));
+    if (app.isPackaged) autoUpdater.checkForUpdates();
   } catch (e) { console.error('[updater] falha ao iniciar:', e && e.message); }
 }
 
 app.whenReady().then(() => {
   createWindow();
-  setupAutoUpdate();
+  // espera a UI carregar antes de checar (pra não perder os eventos de status)
+  dashView.webContents.once('did-finish-load', () => setTimeout(setupAutoUpdate, 1500));
   app.on('activate', () => { if (BaseWindow.getAllWindows().length === 0) createWindow(); });
 });
 
