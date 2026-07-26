@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BaseWindow, WebContentsView, ipcMain, safeStorage } = require('electron');
+const { app, BaseWindow, WebContentsView, ipcMain, safeStorage, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -323,7 +323,20 @@ function setupAutoUpdate() {
     autoUpdater.on('update-available', (i) => sendUpdate('available', { version: i && i.version }));
     autoUpdater.on('update-not-available', () => sendUpdate('none'));
     autoUpdater.on('download-progress', (p) => sendUpdate('downloading', { percent: Math.round(p && p.percent || 0) }));
-    autoUpdater.on('update-downloaded', (i) => sendUpdate('downloaded', { version: i && i.version }));
+    autoUpdater.on('update-downloaded', (i) => {
+      const version = i && i.version;
+      sendUpdate('downloaded', { version });
+      // pergunta ao usuário se quer reiniciar agora pra instalar (se disser "Depois", instala ao fechar o app)
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'Atualização disponível',
+        message: `Nova versão ${version ? 'v' + version : ''} baixada!`,
+        detail: 'Quer reiniciar agora para instalar? Se escolher "Depois", ela será instalada quando você fechar o app.',
+        buttons: ['Reiniciar e instalar', 'Depois'],
+        defaultId: 0,
+        cancelId: 1,
+      }).then((r) => { if (r.response === 0) autoUpdater.quitAndInstall(); }).catch(() => {});
+    });
     autoUpdater.on('error', (e) => sendUpdate('error', { message: e && e.message }));
     if (app.isPackaged) autoUpdater.checkForUpdates();
   } catch (e) { console.error('[updater] falha ao iniciar:', e && e.message); }
