@@ -1,3 +1,6 @@
 node_modules/
 dist/
 *.tmp
+
+# logs de build
+*.log
