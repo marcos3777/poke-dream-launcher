@@ -15,15 +15,15 @@ Navegador multitela leve (Electron) para [PokeDream](https://pokedream.com.br/).
 
 ## ⬇ Baixar (Windows) — o jeito mais facil
 
-**Nao precisa instalar nada nem saber programar.**
+**Nao precisa saber programar. E so instalar como qualquer programa.**
 
-### 👉 [Clique aqui para baixar (.zip)](https://github.com/marcos3777/poke-dream-launcher/releases/latest/download/Poke-Dream-Launcher-Windows-Portable.zip)
+### 👉 [Clique aqui para baixar o instalador (.exe)](https://github.com/marcos3777/poke-dream-launcher/releases/latest/download/Poke-Dream-Launcher-Windows-x64.exe)
 
-1. Baixe o arquivo `.zip` no link acima.
-2. Clique com o **botao direito** no zip baixado → **Extrair tudo**.
-3. Abra a pasta extraida e de **dois cliques** em **`Poke Dream Launcher.exe`**.
+1. Baixe o instalador `.exe` no link acima.
+2. De **dois cliques** nele e siga o instalador (cria um atalho no Desktop).
+3. Abra pelo **atalho** e clique em **+ Adicionar tela** para logar no PokeDream.
 
-Pronto! Clique em **+ Adicionar tela** e faca login no PokeDream.
+> 🔄 **Ele se atualiza sozinho:** quando sair uma versao nova, o app baixa e aplica automaticamente na proxima vez que voce abrir/fechar. Voce nao precisa baixar de novo.
 
 > ⚠️ Na primeira vez o Windows pode mostrar um aviso azul (SmartScreen), porque o app nao tem assinatura digital paga. E so clicar em **Mais informacoes → Executar assim mesmo**. E seguro — todo o codigo esta aqui no repositorio.
 
@@ -33,7 +33,7 @@ Todas as versoes ficam em **[Releases](https://github.com/marcos3777/poke-dream-
 
 ## 📖 Alternativa: rodar pelo codigo (Linux/Mac ou quem quer o codigo-fonte)
 
-> Se voce ja baixou o `.zip` acima, **pode pular esta parte** — ela e so pra quem prefere rodar direto do codigo.
+> Se voce ja instalou pelo `.exe` acima, **pode pular esta parte** — ela e so pra quem prefere rodar direto do codigo.
 
 Nao precisa saber programar. E so seguir na ordem. **Voce so faz os passos 1 e 2 uma unica vez.** (Instrucoes para **Windows**; em Linux/Mac os comandos `npm` sao os mesmos.)
 
