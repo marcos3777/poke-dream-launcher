@@ -21,11 +21,21 @@
   .sep{ border-top:1px solid var(--line2); margin:12px 0 10px; }
   .chk{ display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--txt); margin-bottom:9px; cursor:pointer; }
   .chk input{ cursor:pointer; }
+  .cl-panel{ position:absolute; inset:0; background:var(--bg); border:1px solid var(--line2); border-radius:12px; padding:12px; display:none; flex-direction:column; }
+  .cl-panel.show{ display:flex; }
+  .cl-body{ flex:1; overflow-y:auto; margin-top:4px; }
+  .cl-v{ margin-bottom:13px; }
+  .cl-ver{ font-weight:800; font-size:12.5px; color:var(--gold); margin-bottom:4px; }
+  .cl-date{ font-weight:400; font-size:9.5px; color:var(--mut); }
+  .cl-body ul{ margin:0; padding-left:16px; }
+  .cl-body li{ font-size:11px; color:var(--txt); margin-bottom:3px; line-height:1.35; }
+  .cl-empty{ color:var(--mut); font-size:11px; }
 </style>
 </head>
 <body>
   <div class="h"><span class="t">⚙ Configuracoes</span><button class="x" id="x" title="Fechar">✕</button></div>
   <div class="row">Versao instalada: <b id="ver">—</b></div>
+  <button class="btn" id="changelog-btn">📋 Novidades (o que mudou)</button>
   <button class="btn" id="check">🔄 Verificar atualizacao</button>
   <button class="btn on" id="install" style="display:none">↻ Reiniciar e instalar</button>
   <div class="status" id="status"></div>
@@ -34,6 +44,11 @@
   <label class="chk" title="Grava os frames de rede (WebSocket + respostas /api/) num arquivo, pra analisar o que o jogo manda."><input type="checkbox" id="diag"> 🛠 Gravar dump de diagnostico</label>
   <button class="btn" id="dumpfolder">📂 Abrir pasta do dump</button>
   <div class="status" id="diag-status"></div>
+
+  <div class="cl-panel" id="changelog">
+    <div class="h"><button class="x" id="cl-back" title="Voltar" style="margin-left:0;margin-right:8px">←</button><span class="t">📋 Novidades</span></div>
+    <div class="cl-body" id="cl-body">carregando…</div>
+  </div>
 <script>
   const P = window.poke || null;
   const statusEl = document.getElementById('status');
@@ -63,6 +78,23 @@
       : 'Parado. Clique em "Abrir pasta do dump" pra pegar o arquivo.';
   };
   document.getElementById('dumpfolder').onclick = function(){ if (P && P.openDumpFolder) P.openDumpFolder(); };
+
+  // ---- novidades (changelog) ----
+  function esc(s){ return String(s==null?'':s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
+  const changelog = document.getElementById('changelog');
+  const clBody = document.getElementById('cl-body');
+  document.getElementById('changelog-btn').onclick = function(){
+    changelog.classList.add('show');
+    clBody.innerHTML = 'carregando…';
+    if (!P || !P.getChangelog) { clBody.innerHTML = '<div class="cl-empty">Indisponivel.</div>'; return; }
+    P.getChangelog().then(function(list){
+      clBody.innerHTML = (list && list.length) ? list.map(function(v){
+        return '<div class="cl-v"><div class="cl-ver">v'+esc(v.version)+(v.date?' <span class="cl-date">'+esc(v.date)+'</span>':'')+'</div><ul>'+
+          (v.changes||[]).map(function(c){ return '<li>'+esc(c)+'</li>'; }).join('')+'</ul></div>';
+      }).join('') : '<div class="cl-empty">Sem novidades ainda.</div>';
+    }).catch(function(){ clBody.innerHTML = '<div class="cl-empty">Nao consegui carregar as novidades.</div>'; });
+  };
+  document.getElementById('cl-back').onclick = function(){ changelog.classList.remove('show'); };
 
   if (P && P.onUpdateStatus) P.onUpdateStatus(function(s){
     if (!s) return;

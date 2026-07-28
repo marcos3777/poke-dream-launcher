@@ -301,7 +301,7 @@ function layout() {
 function positionCfg() {
   if (!win || !cfgView) return;
   const b = win.getContentBounds();
-  const W = 300, H = 340;
+  const W = 300, H = 400;
   const width = Math.min(W, Math.max(b.width - SIDE_W - 12, 180));
   const height = Math.min(H, Math.max(b.height - BAR - 14, 140));
   const x = Math.max(b.width - width - 10, SIDE_W + 4);
@@ -507,8 +507,24 @@ ipcMain.handle('checkForUpdate', () => {
   try { autoUpdater.checkForUpdates(); } catch (e) { sendUpdate('error', { message: e && e.message }); }
 });
 ipcMain.handle('installUpdate', () => { try { autoUpdater.quitAndInstall(); } catch (e) { console.error('[updater] quitAndInstall', e && e.message); } });
+// novidades por versão: busca o changelog.json do repo (sempre atualizado); cai no empacotado se offline
+ipcMain.handle('getChangelog', async () => {
+  try {
+    const r = await fetch('https://raw.githubusercontent.com/marcos3777/poke-dream-launcher/master/changelog.json', { cache: 'no-store' });
+    if (r.ok) return await r.json();
+  } catch {}
+  try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'changelog.json'), 'utf8')); } catch {}
+  return [];
+});
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
+// Mantém o jogo rodando quando a janela minimiza/fica coberta (jogo em canvas para o rAF ao ser
+// considerado "oculto"). Estas flags desligam os freios do Chromium pra janela em segundo plano.
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');   // o do "minimizou e parou" no Windows
 
 // avisa a UI do andamento da atualização (o menu de config mostra o status)
 function sendUpdate(state, extra) { send(cfgView, 'update-status', Object.assign({ state }, extra || {})); }
@@ -537,7 +553,10 @@ function setupAutoUpdate() {
       }).then((r) => { if (r.response === 0) autoUpdater.quitAndInstall(); }).catch(() => {});
     });
     autoUpdater.on('error', (e) => sendUpdate('error', { message: e && e.message }));
-    if (app.isPackaged) autoUpdater.checkForUpdates();
+    if (app.isPackaged) {
+      autoUpdater.checkForUpdates();
+      setInterval(() => { try { autoUpdater.checkForUpdates(); } catch {} }, 12 * 60 * 60 * 1000);   // re-checa a cada 12h
+    }
   } catch (e) { console.error('[updater] falha ao iniciar:', e && e.message); }
 }
 

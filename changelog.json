@@ -1,0 +1,59 @@
+[
+  {
+    "version": "1.2.1",
+    "date": "2026-07-28",
+    "changes": [
+      "Botao 'Novidades' no menu de config: mostra o que mudou em cada versao",
+      "Verifica atualizacao automaticamente a cada 12 horas",
+      "Corrige o jogo parando/desacelerando quando a janela fica minimizada"
+    ]
+  },
+  {
+    "version": "1.2.0",
+    "date": "2026-07-28",
+    "changes": [
+      "Barra da esquerda agora mostra o personagem, o pokemon ATIVO na hunt (sprite animado), o nivel e a hunt",
+      "A barra troca o pokemon ao vivo quando voce muda o ativo no jogo (sem precisar recarregar)",
+      "Deteccao de shiny: sprite shiny + nome dourado",
+      "Botao para esconder/mostrar a barra da esquerda (o jogo ocupa a tela toda)",
+      "Ferramenta de diagnostico no menu de config (ajuda a reportar problemas)"
+    ]
+  },
+  {
+    "version": "1.1.3",
+    "date": "2026-07-26",
+    "changes": [
+      "Menu de configuracoes agora flutua por cima do jogo (o jogo continua visivel atras)"
+    ]
+  },
+  {
+    "version": "1.1.2",
+    "date": "2026-07-26",
+    "changes": [
+      "Ao baixar uma atualizacao, pergunta se voce quer reiniciar agora para instalar"
+    ]
+  },
+  {
+    "version": "1.1.1",
+    "date": "2026-07-26",
+    "changes": [
+      "Mostra a versao instalada no topo",
+      "Botao para verificar atualizacao manualmente"
+    ]
+  },
+  {
+    "version": "1.1.0",
+    "date": "2026-07-26",
+    "changes": [
+      "Auto-update: o app se atualiza sozinho quando sai uma versao nova",
+      "Passou a ser um instalador (.exe) com atalho no Desktop, no lugar do zip portatil"
+    ]
+  },
+  {
+    "version": "1.0.0",
+    "date": "2026-07-26",
+    "changes": [
+      "Primeira versao: ate 4 telas do PokeDream, modo foco, e login salvo (criptografado)"
+    ]
+  }
+]

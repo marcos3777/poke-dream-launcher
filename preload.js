@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('poke', {
   getVersion: () => ipcRenderer.invoke('getVersion'),
   checkForUpdate: () => ipcRenderer.invoke('checkForUpdate'),
   installUpdate: () => ipcRenderer.invoke('installUpdate'),
+  getChangelog: () => ipcRenderer.invoke('getChangelog'),
   onAccounts: (cb) => {
     const h = (_e, payload) => { try { cb(payload); } catch {} };
     ipcRenderer.on('accounts', h);

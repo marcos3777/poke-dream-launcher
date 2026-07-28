@@ -1,6 +1,6 @@
 {
   "name": "poke-dream-launcher",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Navegador leve (Electron) para PokeDream — abre ate 4 telas",
   "main": "main.js",
   "scripts": {
@@ -37,7 +37,8 @@
       "main.js",
       "preload.js",
       "app.html",
-      "config.html"
+      "config.html",
+      "changelog.json"
     ],
     "win": {
       "target": "nsis",
