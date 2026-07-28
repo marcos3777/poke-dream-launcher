@@ -18,6 +18,9 @@
   .btn{ width:100%; height:31px; border-radius:8px; border:1px solid var(--line2); background:var(--panel2); color:var(--txt); font-size:12px; margin-bottom:8px; }
   .btn:hover{ background:#1a2231; } .btn.on{ border-color:var(--gold); color:var(--gold); }
   .status{ font-size:11px; color:var(--mut); min-height:16px; line-height:1.45; }
+  .sep{ border-top:1px solid var(--line2); margin:12px 0 10px; }
+  .chk{ display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--txt); margin-bottom:9px; cursor:pointer; }
+  .chk input{ cursor:pointer; }
 </style>
 </head>
 <body>
@@ -26,6 +29,11 @@
   <button class="btn" id="check">🔄 Verificar atualizacao</button>
   <button class="btn on" id="install" style="display:none">↻ Reiniciar e instalar</button>
   <div class="status" id="status"></div>
+
+  <div class="sep"></div>
+  <label class="chk" title="Grava os frames de rede (WebSocket + respostas /api/) num arquivo, pra analisar o que o jogo manda."><input type="checkbox" id="diag"> 🛠 Gravar dump de diagnostico</label>
+  <button class="btn" id="dumpfolder">📂 Abrir pasta do dump</button>
+  <div class="status" id="diag-status"></div>
 <script>
   const P = window.poke || null;
   const statusEl = document.getElementById('status');
@@ -42,6 +50,19 @@
     P.checkForUpdate();
   };
   install.onclick = function(){ if (P && P.installUpdate) P.installUpdate(); };
+
+  // ---- diagnostico (dump) ----
+  const diag = document.getElementById('diag');
+  const diagStatus = document.getElementById('diag-status');
+  if (P && P.getDiag) P.getDiag().then(function(on){ diag.checked = !!on; });
+  diag.onchange = function(){
+    if (!P || !P.setDiag) return;
+    P.setDiag(diag.checked);
+    diagStatus.textContent = diag.checked
+      ? 'Gravando… abra/jogue o que quer capturar, depois desligue e abra a pasta.'
+      : 'Parado. Clique em "Abrir pasta do dump" pra pegar o arquivo.';
+  };
+  document.getElementById('dumpfolder').onclick = function(){ if (P && P.openDumpFolder) P.openDumpFolder(); };
 
   if (P && P.onUpdateStatus) P.onUpdateStatus(function(s){
     if (!s) return;

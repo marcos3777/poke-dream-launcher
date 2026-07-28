@@ -1,9 +1,10 @@
 'use strict';
 
-const { app, BaseWindow, WebContentsView, ipcMain, safeStorage, dialog } = require('electron');
+const { app, BaseWindow, WebContentsView, ipcMain, safeStorage, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const { autoUpdater } = require('electron-updater');
 
 const GAME_URL = 'https://pokedream.com.br/';
@@ -24,6 +25,144 @@ let gameMode = 'grid';
 let storageDir = null;
 let cfgView = null;      // overlay do menu de config (view própria, por cima das telas do jogo)
 let cfgOpen = false;
+let sidebarHidden = false;   // barra da esquerda escondida -> telas do jogo ocupam a largura toda
+let diagOn = false;      // modo diagnóstico: grava frames WS + respostas REST num dump (pra ver o que o jogo manda)
+let DUMP_FILE = null;
+let diagLines = 0;
+
+// ---- diagnóstico: captura de rede (só grava quando diagOn) ----
+function diagWrite(obj) {
+  if (!DUMP_FILE || diagLines > 40000) return;   // teto pra não virar GB
+  try { fs.appendFileSync(DUMP_FILE, JSON.stringify(obj) + '\n'); diagLines++; } catch {}
+}
+function dumpWs(slot, dir, payload, isBinary) {
+  if (isBinary) {   // frame binário (opcode 2) — payload vem base64; guarda cru pra decodificar na análise
+    let raw = payload; if (raw && raw.length > 200000) raw = raw.slice(0, 200000);
+    diagWrite({ slot, ts: Date.now(), kind: 'ws', dir, type: 'binary', b64: true, raw });
+    return;
+  }
+  let type = 'unknown';
+  try {
+    const s = String(payload);
+    // Socket.IO: "42/namespace,[\"evento\",...]" ou "42[\"evento\",...]"; Engine.IO: só dígitos ("2","3")
+    const m = s.match(/^\d+(\/[^,[]+)?,?(\[[\s\S]*)$/);
+    if (m && m[2]) {
+      const arr = JSON.parse(m[2]);
+      if (Array.isArray(arr) && typeof arr[0] === 'string') type = (m[1] ? m[1].slice(1) + ' ' : '') + arr[0];
+    } else if (/^\d+$/.test(s)) {
+      type = 'engineio/' + s;   // ping/pong/handshake — ruído
+    } else {
+      const j = JSON.parse(s); if (j && j.type) type = j.type;
+    }
+  } catch {}
+  diagWrite({ slot, ts: Date.now(), kind: 'ws', dir, type, raw: payload });
+}
+const REDACT = /([?&](?:token|access_token|jwt|auth|refresh(?:Token)?|password)=)[^&]*/gi;
+function dumpHttp(slot, url, body, b64) {
+  let raw = body; if (b64) { try { raw = Buffer.from(body, 'base64').toString('utf8'); } catch {} }
+  if (raw && raw.length > 1000000) raw = raw.slice(0, 1000000) + '…[truncado]';
+  diagWrite({ slot, ts: Date.now(), kind: 'http', url: String(url).replace(REDACT, '$1<redacted>'), raw });
+}
+function dumpHttpReq(slot, url, body) {   // corpo do REQUEST (ex.: POST /save carrega o estado)
+  let raw = body; if (raw && raw.length > 1000000) raw = raw.slice(0, 1000000) + '…[truncado]';
+  diagWrite({ slot, ts: Date.now(), kind: 'http-req', url: String(url).replace(REDACT, '$1<redacted>'), raw });
+}
+
+// ---- extrai nome / hunt / pokémon ATIVO do estado pra alimentar a sidebar ----
+// progress.activeUid = uid do pokémon ativo na hunt (muda quando você troca). Casa com o box pelo uid.
+// shiny = a entrada do box tem `shiny:true`.
+function setActive(g, uid) {   // resolve o uid ativo no box mantido -> atualiza g.active (devolve true se mudou)
+  const p = g._box && g._box[uid];
+  const key = uid + (p ? '|' + p.species + '|' + p.level + '|' + (p.shiny ? 1 : 0) : '|?');
+  if (key === g._activeKey) return false;
+  g._activeKey = key;
+  if (p) g.active = { species: p.species, level: p.level, shiny: p.shiny };
+  return !!p;
+}
+function applyState(g, state) {   // estado COMPLETO (/offline ou /save cheio): guarda o box e o ativo
+  if (!state) return false;
+  const prog = state.progress || state;
+  let changed = false;
+  if (state.huntId != null && state.huntId !== g.hunt) { g.hunt = state.huntId; changed = true; }
+  if (Array.isArray(prog.box)) {
+    g._box = {}; for (const p of prog.box) if (p && p.uid != null) g._box[p.uid] = { species: p.species, level: p.level, shiny: !!p.shiny };
+  }
+  if (prog.activeUid != null && setActive(g, prog.activeUid)) changed = true;
+  return changed;
+}
+function applyPatch(g, patch) {   // delta descomprimido: campos que MUDARAM (activeUid na troca, huntId, boxDelta)
+  let changed = false;
+  if (patch.huntId != null && patch.huntId !== g.hunt) { g.hunt = patch.huntId; changed = true; }
+  if (patch.boxDelta && g._box) for (const uid in patch.boxDelta) { const d = patch.boxDelta[uid]; if (g._box[uid] && d && d.level != null) g._box[uid].level = d.level; }
+  const prog = patch.progress || {};
+  if (prog.activeUid != null && setActive(g, prog.activeUid)) changed = true;
+  return changed;
+}
+function feedState(g, url, body) {   // usado por /offline (resposta) e /save (request)
+  const m = url.match(/\/characters\/([^/]+)\//); if (m) g._charId = m[1];
+  let j; try { j = JSON.parse(body); } catch { return; }
+  const st = j.state || j;
+  let changed;
+  if (st.patchGz) {   // /save delta: patch gzipado -> descomprime e aplica só o que mudou
+    let patch; try { patch = JSON.parse(zlib.gunzipSync(Buffer.from(st.patchGz, 'base64')).toString('utf8')); } catch { return; }
+    changed = applyPatch(g, patch);
+  } else {
+    changed = applyState(g, st.progress ? st : (j.state || null));
+  }
+  resolveName(g);
+  if (changed || m) pushAccounts();
+}
+function isInfoUrl(url) { return /\/characters(\?|$)/.test(url) || /\/characters\/[^/]+\/offline$/.test(url); }
+function isStateReqUrl(url) { return /\/characters\/[^/]+\/(save|actions)$/.test(url); }   // POSTs com o estado
+function parseInfo(g, url, body) {
+  let j; try { j = JSON.parse(body); } catch { return; }
+  if (Array.isArray(j) && j[0] && j[0].id && j[0].name) {   // GET /characters -> lista de personagens
+    g._charNames = {}; for (const c of j) if (c && c.id) g._charNames[c.id] = c.name;
+    resolveName(g); pushAccounts(); return;
+  }
+  feedState(g, url, body);   // GET /characters/<id>/offline -> estado completo
+}
+function resolveName(g) { if (g._charNames && g._charId && g._charNames[g._charId]) g.charName = g._charNames[g._charId]; }
+function pushAccounts() { if (dashView) send(dashView, 'accounts', buildAccountsPayload()); }
+
+// anexa o CDP na tela do jogo. SEMPRE lê /characters + /offline (pra sidebar); só grava o dump quando diagOn.
+function attachCapture(g) {
+  const wc = g.view.webContents;
+  const reqs = new Map();   // requestId -> url (das chamadas AJAX que interessam)
+  try { wc.debugger.attach('1.3'); } catch (e) { console.error('[diag] attach', g.slot, e && e.message); return; }
+  wc.debugger.sendCommand('Network.enable').catch(() => {});
+  wc.debugger.on('message', (_e, method, params) => {
+    try {
+      if (method === 'Network.requestWillBeSent') {
+        // POST /save (e /actions) carregam o estado ATUAL no corpo -> alimenta a sidebar ao vivo + dump
+        const req = params.request, url = req && req.url;
+        if (!url || !isStateReqUrl(url)) return;
+        const handle = (pd) => { if (pd == null) return; if (diagOn) dumpHttpReq(g.slot, url, pd); feedState(g, url, pd); };
+        if (req.postData != null) handle(req.postData);
+        else if (req.hasPostData) wc.debugger.sendCommand('Network.getRequestPostData', { requestId: params.requestId }).then((r) => handle(r && r.postData)).catch(() => {});
+      } else if (method === 'Network.webSocketCreated') {
+        if (diagOn) diagWrite({ slot: g.slot, ts: Date.now(), kind: 'ws-open', url: String(params.url || '').split('?')[0] });
+      } else if (method === 'Network.webSocketFrameReceived' || method === 'Network.webSocketFrameSent') {
+        if (!diagOn) return;
+        const r = params.response, dir = method === 'Network.webSocketFrameSent' ? 'sent' : 'recv';
+        if (r && r.payloadData != null && (r.opcode === 1 || r.opcode === 2)) dumpWs(g.slot, dir, r.payloadData, r.opcode === 2);
+      } else if (method === 'Network.responseReceived') {
+        const t = params.type, url = params.response && params.response.url;
+        if (url && (t === 'XHR' || t === 'Fetch')) reqs.set(params.requestId, url);
+      } else if (method === 'Network.loadingFinished') {
+        const url = reqs.get(params.requestId); if (url == null) return; reqs.delete(params.requestId);
+        const info = isInfoUrl(url), dump = diagOn;
+        if (!info && !dump) return;
+        wc.debugger.sendCommand('Network.getResponseBody', { requestId: params.requestId }).then((res) => {
+          if (!res || res.body == null) return;
+          const text = res.base64Encoded ? Buffer.from(res.body, 'base64').toString('utf8') : res.body;
+          if (dump) dumpHttp(g.slot, url, res.body, res.base64Encoded);
+          if (info) try { parseInfo(g, url, text); } catch {}
+        }).catch(() => {});
+      }
+    } catch {}
+  });
+}
 
 function activeSlots() { return games.map(g => g.slot); }
 function nextFreeSlot() { for (let s = 1; s <= MAXV; s++) if (!activeSlots().includes(s)) return s; return null; }
@@ -137,7 +276,7 @@ function layout() {
   const b = win.getContentBounds();
   setViewBounds(dashView, { x: 0, y: 0, width: b.width, height: b.height });
 
-  const x0 = SIDE_W, y0 = BAR, w = Math.max(b.width - x0, 100), h = Math.max(b.height - y0, 100);
+  const x0 = sidebarHidden ? 0 : SIDE_W, y0 = BAR, w = Math.max(b.width - x0, 100), h = Math.max(b.height - y0, 100);
   const target = new Map();
 
   if (gameMode === 'grid') {
@@ -162,7 +301,7 @@ function layout() {
 function positionCfg() {
   if (!win || !cfgView) return;
   const b = win.getContentBounds();
-  const W = 300, H = 250;
+  const W = 300, H = 340;
   const width = Math.min(W, Math.max(b.width - SIDE_W - 12, 180));
   const height = Math.min(H, Math.max(b.height - BAR - 14, 140));
   const x = Math.max(b.width - width - 10, SIDE_W + 4);
@@ -227,6 +366,7 @@ function createGame(slot) {
   // rede de segurança periódica (o saveStorage só grava de fato quando algo mudou)
   g._saveInterval = setInterval(() => { if (!g._loopGuard) { persistCookies(g).catch(() => {}); saveStorage(g).catch(() => {}); } }, 30000);
 
+  attachCapture(g);   // CDP pra o dump de diagnóstico (só grava quando ligado nas config)
   wc.loadURL(GAME_URL).catch(e => console.error('[launcher] loadURL', slot, e && e.message));
   win.contentView.addChildView(view);
   view.setVisible(false);
@@ -263,7 +403,9 @@ function removeGame(slot) {
 }
 
 function buildAccountsPayload() {
-  return { slots: activeSlots(), selected: selectedSlot, mode: gameMode };
+  const info = {};
+  for (const g of games) info[g.slot] = { name: g.charName || null, hunt: g.hunt || null, active: g.active || null };
+  return { slots: activeSlots(), selected: selectedSlot, mode: gameMode, info };
 }
 
 function send(target, ch, payload) {
@@ -273,6 +415,7 @@ function send(target, ch, payload) {
 function createWindow() {
   storageDir = path.join(app.getPath('userData'), 'storage');
   fs.mkdirSync(storageDir, { recursive: true });
+  DUMP_FILE = path.join(app.getPath('userData'), 'ws-dump.jsonl');
 
   win = new BaseWindow({
     width: 1400, height: 860,
@@ -341,6 +484,21 @@ ipcMain.handle('winMaximize', async () => { if (win) win.isMaximized() ? win.unm
 ipcMain.handle('winClose', async () => { app.quit(); });
 ipcMain.handle('toggleConfig', () => setConfigOpen(!cfgOpen));
 ipcMain.handle('closeConfig', () => setConfigOpen(false));
+ipcMain.handle('setSidebar', (_e, hidden) => { sidebarHidden = !!hidden; layout(); return sidebarHidden; });
+// ---- diagnóstico (dump de rede) ----
+ipcMain.handle('getDiag', () => diagOn);
+ipcMain.handle('setDiag', (_e, on) => {
+  diagOn = !!on;
+  if (diagOn) {
+    try { fs.writeFileSync(DUMP_FILE, ''); } catch {}   // começa limpo
+    diagLines = 0;
+    games.forEach(g => { try { g.view.webContents.reload(); } catch {} });   // recarrega pra capturar o estado inicial
+  }
+  return diagOn;
+});
+ipcMain.handle('openDumpFolder', () => {
+  try { if (DUMP_FILE && fs.existsSync(DUMP_FILE)) shell.showItemInFolder(DUMP_FILE); else shell.openPath(app.getPath('userData')); } catch {}
+});
 
 // ---- auto-update (via GitHub Releases) ----
 ipcMain.handle('getVersion', () => app.getVersion());
