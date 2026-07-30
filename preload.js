@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('poke', {
   getBox: () => ipcRenderer.invoke('getBox'),
   getDiag: () => ipcRenderer.invoke('getDiag'),
   setDiag: (on) => ipcRenderer.invoke('setDiag', on),
+  isDev: () => ipcRenderer.invoke('isDev'),
   getTelemetry: () => ipcRenderer.invoke('getTelemetry'),
   setTelemetry: (on) => ipcRenderer.invoke('setTelemetry', on),
   getSoundSettings: () => ipcRenderer.invoke('getSoundSettings'),

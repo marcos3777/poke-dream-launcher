@@ -581,6 +581,7 @@ ipcMain.handle('openDumpFolder', () => {
   try { if (DUMP_FILE && fs.existsSync(DUMP_FILE)) shell.showItemInFolder(DUMP_FILE); else shell.openPath(app.getPath('userData')); } catch {}
 });
 
+ipcMain.handle('isDev', () => !app.isPackaged);
 ipcMain.handle('getTelemetry', () => telemetryOn);
 ipcMain.handle('setTelemetry', (_e, on) => { telemetryOn = !!on; saveSettings(); return telemetryOn; });
 
