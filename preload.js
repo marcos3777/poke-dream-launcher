@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('poke', {
   toggleConfig: () => ipcRenderer.invoke('toggleConfig'),
   closeConfig: () => ipcRenderer.invoke('closeConfig'),
   setSidebar: (hidden) => ipcRenderer.invoke('setSidebar', hidden),
+  setBoxOpen: (open) => ipcRenderer.invoke('setBoxOpen', open),
+  getBox: () => ipcRenderer.invoke('getBox'),
   getDiag: () => ipcRenderer.invoke('getDiag'),
   setDiag: (on) => ipcRenderer.invoke('setDiag', on),
   openDumpFolder: () => ipcRenderer.invoke('openDumpFolder'),

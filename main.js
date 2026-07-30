@@ -26,8 +26,10 @@ let storageDir = null;
 let cfgView = null;      // overlay do menu de config (view própria, por cima das telas do jogo)
 let cfgOpen = false;
 let sidebarHidden = false;   // barra da esquerda escondida -> telas do jogo ocupam a largura toda
+let boxOpen = false;         // Box unificada aberta -> esconde as telas do jogo pra mostrar o painel
 let diagOn = false;      // modo diagnóstico: grava frames WS + respostas REST num dump (pra ver o que o jogo manda)
 let DUMP_FILE = null;
+let SESSION_FILE = null;   // guarda quantas telas estavam abertas, pra reabrir na próxima vez
 let diagLines = 0;
 
 // ---- diagnóstico: captura de rede (só grava quando diagOn) ----
@@ -71,13 +73,20 @@ function dumpHttpReq(slot, url, body) {   // corpo do REQUEST (ex.: POST /save c
 // ---- extrai nome / hunt / pokémon ATIVO do estado pra alimentar a sidebar ----
 // progress.activeUid = uid do pokémon ativo na hunt (muda quando você troca). Casa com o box pelo uid.
 // shiny = a entrada do box tem `shiny:true`.
-function setActive(g, uid) {   // resolve o uid ativo no box mantido -> atualiza g.active (devolve true se mudou)
-  const p = g._box && g._box[uid];
-  const key = uid + (p ? '|' + p.species + '|' + p.level + '|' + (p.shiny ? 1 : 0) : '|?');
-  if (key === g._activeKey) return false;
-  g._activeKey = key;
-  if (p) g.active = { species: p.species, level: p.level, shiny: p.shiny };
-  return !!p;
+// XP por nível (fórmula do jogo: floor(xpBase * level^xpExp), xpBase=20, xpExp=1.5)
+function xpNeeded(level) { return Math.floor(20 * Math.pow(Math.max(1, level || 1), 1.5)); }
+function xpPct(p) { if (!p || p.xp == null || p.level == null) return null; const n = xpNeeded(p.level); if (!n) return 0; return Math.max(0, Math.min(100, Math.round(p.xp / n * 100))); }
+function pokeView(g, uid) { const p = g._box && g._box[uid]; if (!p) return null; return { species: p.species, level: p.level, shiny: !!p.shiny, xpPct: xpPct(p) }; }
+
+// recomputa g.active (pokémon ativo na hunt) + g.party2 (2º da party) -> devolve true se algo mudou
+function refreshActive(g) {
+  const active = g._activeUid != null ? pokeView(g, g._activeUid) : null;
+  const p2uid = (Array.isArray(g._party) && g._party.length > 1) ? g._party[1] : null;
+  const party2 = p2uid != null ? pokeView(g, p2uid) : null;
+  const sig = JSON.stringify([active, party2]);
+  if (sig === g._sig) return false;
+  g._sig = sig; g.active = active; g.party2 = party2;
+  return true;
 }
 function applyState(g, state) {   // estado COMPLETO (/offline ou /save cheio): guarda o box e o ativo
   if (!state) return false;
@@ -85,17 +94,21 @@ function applyState(g, state) {   // estado COMPLETO (/offline ou /save cheio): 
   let changed = false;
   if (state.huntId != null && state.huntId !== g.hunt) { g.hunt = state.huntId; changed = true; }
   if (Array.isArray(prog.box)) {
-    g._box = {}; for (const p of prog.box) if (p && p.uid != null) g._box[p.uid] = { species: p.species, level: p.level, shiny: !!p.shiny };
+    g._box = {}; for (const p of prog.box) if (p && p.uid != null) g._box[p.uid] = { uid: p.uid, species: p.species, level: p.level, xp: p.xp, shiny: !!p.shiny, potential: p.potential, essence: p.essence, stored: p.stored };
   }
-  if (prog.activeUid != null && setActive(g, prog.activeUid)) changed = true;
+  if (Array.isArray(prog.party)) g._party = prog.party.slice();
+  if (prog.activeUid != null) g._activeUid = prog.activeUid;
+  if (refreshActive(g)) changed = true;
   return changed;
 }
-function applyPatch(g, patch) {   // delta descomprimido: campos que MUDARAM (activeUid na troca, huntId, boxDelta)
+function applyPatch(g, patch) {   // delta descomprimido: campos que MUDARAM (activeUid na troca, huntId, boxDelta com xp)
   let changed = false;
   if (patch.huntId != null && patch.huntId !== g.hunt) { g.hunt = patch.huntId; changed = true; }
-  if (patch.boxDelta && g._box) for (const uid in patch.boxDelta) { const d = patch.boxDelta[uid]; if (g._box[uid] && d && d.level != null) g._box[uid].level = d.level; }
+  if (patch.boxDelta && g._box) for (const uid in patch.boxDelta) { const d = patch.boxDelta[uid], e = g._box[uid]; if (e && d) { if (d.level != null) e.level = d.level; if (d.xp != null) e.xp = d.xp; } }
   const prog = patch.progress || {};
-  if (prog.activeUid != null && setActive(g, prog.activeUid)) changed = true;
+  if (Array.isArray(prog.party)) g._party = prog.party.slice();
+  if (prog.activeUid != null) g._activeUid = prog.activeUid;
+  if (refreshActive(g)) changed = true;
   return changed;
 }
 function feedState(g, url, body) {   // usado por /offline (resposta) e /save (request)
@@ -279,12 +292,15 @@ function layout() {
   const x0 = sidebarHidden ? 0 : SIDE_W, y0 = BAR, w = Math.max(b.width - x0, 100), h = Math.max(b.height - y0, 100);
   const target = new Map();
 
-  if (gameMode === 'grid') {
-    const rects = tileRects(games.length, x0, y0, w, h);
-    games.forEach((g, i) => { if (rects[i]) target.set(g.slot, rects[i]); });
-  } else if (gameMode === 'single' && selectedSlot != null) {
-    if (games.some(x => x.slot === selectedSlot)) {
-      target.set(selectedSlot, { x: x0, y: y0, width: w, height: h });
+  // Box aberta: nenhuma tela do jogo visível, pra o painel da Box (no dashView) aparecer
+  if (!boxOpen) {
+    if (gameMode === 'grid') {
+      const rects = tileRects(games.length, x0, y0, w, h);
+      games.forEach((g, i) => { if (rects[i]) target.set(g.slot, rects[i]); });
+    } else if (gameMode === 'single' && selectedSlot != null) {
+      if (games.some(x => x.slot === selectedSlot)) {
+        target.set(selectedSlot, { x: x0, y: y0, width: w, height: h });
+      }
     }
   }
 
@@ -380,6 +396,7 @@ function addGame() {
   createGame(slot);
   layout();
   send(dashView, 'accounts', buildAccountsPayload());
+  saveSession();
   return activeSlots();
 }
 
@@ -399,12 +416,13 @@ function removeGame(slot) {
   }
   layout();
   send(dashView, 'accounts', buildAccountsPayload());
+  saveSession();
   return activeSlots();
 }
 
 function buildAccountsPayload() {
   const info = {};
-  for (const g of games) info[g.slot] = { name: g.charName || null, hunt: g.hunt || null, active: g.active || null };
+  for (const g of games) info[g.slot] = { name: g.charName || null, hunt: g.hunt || null, active: g.active || null, party2: g.party2 || null };
   return { slots: activeSlots(), selected: selectedSlot, mode: gameMode, info };
 }
 
@@ -412,10 +430,18 @@ function send(target, ch, payload) {
   try { if (target && !target.webContents.isDestroyed()) target.webContents.send(ch, payload); } catch {}
 }
 
+// ---- lembra quantas telas estavam abertas, pra reabrir na próxima vez ----
+function saveSession() { try { if (SESSION_FILE) fs.writeFileSync(SESSION_FILE, JSON.stringify({ views: games.length })); } catch {} }
+function loadSessionCount() {
+  try { const j = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8')); const n = parseInt(j.views, 10); if (n >= 1 && n <= MAXV) return n; } catch {}
+  return 1;
+}
+
 function createWindow() {
   storageDir = path.join(app.getPath('userData'), 'storage');
   fs.mkdirSync(storageDir, { recursive: true });
   DUMP_FILE = path.join(app.getPath('userData'), 'ws-dump.jsonl');
+  SESSION_FILE = path.join(app.getPath('userData'), 'session.json');
 
   win = new BaseWindow({
     width: 1400, height: 860,
@@ -452,7 +478,8 @@ function createWindow() {
 
   layout();
 
-  setTimeout(() => addGame(), 500);
+  // reabre a mesma quantidade de telas que estava aberta da última vez
+  setTimeout(() => { const n = loadSessionCount(); for (let k = 0; k < n; k++) setTimeout(() => addGame(), k * 400); }, 500);
 }
 
 // ---- IPC handlers ----
@@ -485,6 +512,9 @@ ipcMain.handle('winClose', async () => { app.quit(); });
 ipcMain.handle('toggleConfig', () => setConfigOpen(!cfgOpen));
 ipcMain.handle('closeConfig', () => setConfigOpen(false));
 ipcMain.handle('setSidebar', (_e, hidden) => { sidebarHidden = !!hidden; layout(); return sidebarHidden; });
+ipcMain.handle('setBoxOpen', (_e, open) => { boxOpen = !!open; layout(); return boxOpen; });
+// Box unificada: coleção (bag+depot) de todas as contas, com nome e slot
+ipcMain.handle('getBox', () => games.map(g => ({ slot: g.slot, name: g.charName || ('Tela ' + g.slot), pokes: g._box ? Object.values(g._box) : [] })));
 // ---- diagnóstico (dump de rede) ----
 ipcMain.handle('getDiag', () => diagOn);
 ipcMain.handle('setDiag', (_e, on) => {

@@ -43,12 +43,16 @@
     border:1px solid var(--line); background:var(--panel); color:var(--txt); cursor:pointer; text-align:left;
     font-size:12.5px; font-weight:700; width:100%; transition:border-color .15s,background .15s; }
   .acc:hover{ background:#1a2231; } .acc.on{ border-color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset; background:#1a1e0b; }
-  .acc-spr{ width:42px; height:42px; flex:0 0 42px; object-fit:contain; image-rendering:pixelated; }
-  .acc-spr.ph{ background:var(--panel2); border-radius:8px; border:1px solid var(--line2); }
+  .acc-sprites{ position:relative; width:56px; height:44px; flex:0 0 56px; }
+  .acc-spr{ position:absolute; right:0; bottom:0; width:42px; height:42px; object-fit:contain; image-rendering:pixelated; z-index:2; }
+  .acc-spr.ph{ right:0; bottom:0; width:42px; height:42px; background:var(--panel2); border-radius:8px; border:1px solid var(--line2); }
+  .acc-spr2{ position:absolute; left:0; bottom:1px; width:31px; height:31px; object-fit:contain; image-rendering:pixelated; z-index:1; opacity:.62; filter:brightness(.8); }
   .acc-info{ min-width:0; flex:1 1 auto; display:flex; flex-direction:column; gap:1px; }
   .acc-name{ font-weight:700; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .acc-sub{ font-weight:400; font-size:10.5px; color:var(--mut); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .acc-sub.shiny{ color:var(--gold); font-weight:700; }
+  .acc-p2{ font-weight:400; font-size:9px; color:#7b8698; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .acc-p2 b{ color:#7b8698; font-weight:700; }
   .acc-hunt{ font-weight:400; font-size:10px; color:#5a6478; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .acc-reload{ flex:0 0 auto; color:var(--mut); font-size:15px; padding:3px 6px; border-radius:6px; opacity:0; transition:opacity .12s,color .12s; }
   .acc:hover .acc-reload{ opacity:.85; }
@@ -65,6 +69,36 @@
   .main{ flex:1; min-width:0; padding:12px; display:flex; align-items:center; justify-content:center; }
   .empty{ color:var(--mut); font-size:13px; text-align:center; }
   .empty b{ color:var(--gold); }
+  .box-wrap{ display:flex; flex-direction:column; width:100%; height:100%; }
+  .box-top{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding-bottom:9px; border-bottom:1px solid var(--line); flex:0 0 auto; }
+  .box-top b{ font-size:14px; }
+  .box-top label{ font-size:11.5px; color:var(--mut); display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .box-top select{ background:var(--panel2); color:var(--txt); border:1px solid var(--line2); border-radius:7px; padding:4px 8px; font-size:11.5px; outline:none; }
+  .box-count{ color:var(--gold); font-size:11px; font-weight:700; }
+  .mclose{ margin-left:auto; }
+  .box-sort{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; padding:9px 0 4px; flex:0 0 auto; }
+  .box-sort .lbl{ color:var(--mut); font-size:10px; text-transform:uppercase; letter-spacing:.5px; margin-right:2px; }
+  .sbtn{ background:var(--panel2); border:1px solid var(--line2); color:var(--mut); border-radius:999px; padding:4px 12px; font-size:11px; cursor:pointer; }
+  .sbtn:hover{ color:var(--txt); border-color:var(--line2); }
+  .sbtn.on{ background:var(--gold); color:#1a1205; border-color:var(--gold); font-weight:700; }
+  .box-zoom{ display:flex; align-items:center; gap:6px; color:var(--mut); font-size:12px; }
+  .box-zoom input[type=range]{ width:96px; accent-color:var(--gold); cursor:pointer; }
+  .box-scroll{ flex:1 1 auto; overflow-y:auto; overflow-x:hidden; margin-top:6px; }
+  .box-grid{ display:flex; flex-wrap:wrap; gap:8px; align-content:flex-start; padding:4px 2px 12px; }
+  .box-cell{ width:var(--cell,84px); height:var(--cell,84px); border-radius:11px; background:#10141d; border:1px solid var(--line2); display:flex; flex-direction:column; align-items:center; position:relative; cursor:grab; padding:4px 3px; overflow:hidden; }
+  .box-cell:hover{ filter:brightness(1.3); border-color:#3a4762; }
+  .box-cell.dragging{ opacity:.3; cursor:grabbing; }
+  .box-cell.over{ outline:2px dashed var(--gold); outline-offset:2px; }
+  .box-cell img{ width:calc(var(--cell,84px) - 40px); height:calc(var(--cell,84px) - 40px); image-rendering:pixelated; pointer-events:none; margin:auto 0; }
+  .box-num{ align-self:flex-start; font-size:8.5px; line-height:1; color:var(--mut); font-weight:700; font-variant-numeric:tabular-nums; pointer-events:none; }
+  .box-name{ max-width:100%; font-size:8.5px; line-height:1.15; color:var(--txt); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
+  .box-name.shiny{ color:var(--gold); }
+  .box-cell .sh{ position:absolute; top:2px; right:3px; font-size:10px; pointer-events:none; }
+  .box-tip{ position:fixed; z-index:60; pointer-events:none; background:#0d1119; border:1px solid var(--line2); border-radius:9px; padding:8px 11px; font-size:11px; color:var(--txt); box-shadow:0 8px 24px rgba(0,0,0,.55); display:none; min-width:118px; }
+  .box-tip .tn{ font-weight:800; font-size:12px; margin-bottom:4px; }
+  .box-tip .tr{ color:var(--mut); line-height:1.5; }
+  .box-tip .tr b{ color:var(--txt); font-weight:700; }
+  .box-shiny{ color:var(--gold); font-weight:700; }
 </style>
 </head>
 <body>
@@ -74,6 +108,7 @@
     <span class="brand"><span class="logo"></span>POKEDREAM <b>LAUNCHER</b> <span class="ver" id="app-ver">…</span></span>
     <span class="sp"></span>
     <button class="tbtn" id="btn-grid" style="display:none">▦ Grade</button>
+    <button class="tbtn" id="btn-box">📦 Box</button>
     <button class="tbtn" id="btn-add">+ Adicionar tela</button>
     <button class="ico" id="btn-cfg" title="Configuracoes / Atualizacao">⚙</button>
     <button class="ico" id="btn-min">—</button>
@@ -97,6 +132,143 @@
   // nome (grafia do pokedream) -> nº da dex nacional, pra usar o sprite ANIMADO (gen-V) do PokeAPI
   const DEX_MAP = {"Bulbasaur":1,"Ivysaur":2,"Venusaur":3,"Charmander":4,"Charmeleon":5,"Charizard":6,"Squirtle":7,"Wartortle":8,"Blastoise":9,"Caterpie":10,"Metapod":11,"Butterfree":12,"Weedle":13,"Kakuna":14,"Beedrill":15,"Pidgey":16,"Pidgeotto":17,"Pidgeot":18,"Rattata":19,"Raticate":20,"Spearow":21,"Fearow":22,"Ekans":23,"Arbok":24,"Pikachu":25,"Raichu":26,"Sandshrew":27,"Sandslash":28,"NidoranF":29,"Nidorina":30,"Nidoqueen":31,"NidoranM":32,"Nidorino":33,"Nidoking":34,"Clefairy":35,"Clefable":36,"Vulpix":37,"Ninetales":38,"Jigglypuff":39,"Wigglytuff":40,"Zubat":41,"Golbat":42,"Oddish":43,"Gloom":44,"Vileplume":45,"Paras":46,"Parasect":47,"Venonat":48,"Venomoth":49,"Diglett":50,"Dugtrio":51,"Meowth":52,"Persian":53,"Psyduck":54,"Golduck":55,"Mankey":56,"Primeape":57,"Growlithe":58,"Arcanine":59,"Poliwag":60,"Poliwhirl":61,"Poliwrath":62,"Abra":63,"Kadabra":64,"Alakazam":65,"Machop":66,"Machoke":67,"Machamp":68,"Bellsprout":69,"Weepinbell":70,"Victreebel":71,"Tentacool":72,"Tentacruel":73,"Geodude":74,"Graveler":75,"Golem":76,"Ponyta":77,"Rapidash":78,"Slowpoke":79,"Slowbro":80,"Magnemite":81,"Magneton":82,"Farfetchd":83,"Doduo":84,"Dodrio":85,"Seel":86,"Dewgong":87,"Grimer":88,"Muk":89,"Shellder":90,"Cloyster":91,"Gastly":92,"Haunter":93,"Gengar":94,"Onix":95,"Drowzee":96,"Hypno":97,"Krabby":98,"Kingler":99,"Voltorb":100,"Electrode":101,"Exeggcute":102,"Exeggutor":103,"Cubone":104,"Marowak":105,"Hitmonlee":106,"Hitmonchan":107,"Lickitung":108,"Koffing":109,"Weezing":110,"Rhyhorn":111,"Rhydon":112,"Chansey":113,"Tangela":114,"Kangaskhan":115,"Horsea":116,"Seadra":117,"Goldeen":118,"Seaking":119,"Staryu":120,"Starmie":121,"MrMime":122,"Scyther":123,"Jynx":124,"Electabuzz":125,"Magmar":126,"Pinsir":127,"Tauros":128,"Magikarp":129,"Gyarados":130,"Lapras":131,"Ditto":132,"Eevee":133,"Vaporeon":134,"Jolteon":135,"Flareon":136,"Porygon":137,"Omanyte":138,"Omastar":139,"Kabuto":140,"Kabutops":141,"Aerodactyl":142,"Snorlax":143,"Dratini":147,"Dragonair":148,"Dragonite":149,"Chikorita":152,"Bayleef":153,"Meganium":154,"Cyndaquil":155,"Quilava":156,"Typhlosion":157,"Totodile":158,"Croconaw":159,"Feraligatr":160,"Sentret":161,"Furret":162,"Hoothoot":163,"Noctowl":164,"Ledyba":165,"Ledian":166,"Spinarak":167,"Ariados":168,"Crobat":169,"Chinchou":170,"Lanturn":171,"Pichu":172,"Cleffa":173,"Igglybuff":174,"Togepi":175,"Togetic":176,"Natu":177,"Xatu":178,"Mareep":179,"Flaaffy":180,"Ampharos":181,"Bellossom":182,"Marill":183,"Azumarill":184,"Sudowoodo":185,"Politoed":186,"Hoppip":187,"Skiploom":188,"Jumpluff":189,"Aipom":190,"Sunkern":191,"Sunflora":192,"Yanma":193,"Wooper":194,"Quagsire":195,"Espeon":196,"Umbreon":197,"Murkrow":198,"Slowking":199,"Misdreavus":200,"Unown":201,"Wobbuffet":202,"Girafarig":203,"Pineco":204,"Forretress":205,"Dunsparce":206,"Gligar":207,"Steelix":208,"Snubbull":209,"Granbull":210,"Qwilfish":211,"Scizor":212,"Shuckle":213,"Heracross":214,"Sneasel":215,"Teddiursa":216,"Ursaring":217,"Slugma":218,"Magcargo":219,"Swinub":220,"Piloswine":221,"Corsola":222,"Remoraid":223,"Octillery":224,"Delibird":225,"Mantine":226,"Skarmory":227,"Houndour":228,"Houndoom":229,"Kingdra":230,"Phanpy":231,"Donphan":232,"Porygon2":233,"Stantler":234,"Smeargle":235,"Tyrogue":236,"Hitmontop":237,"Smoochum":238,"Elekid":239,"Magby":240,"Miltank":241,"Blissey":242,"Larvitar":246,"Pupitar":247,"Tyranitar":248};
   function spr(name, shiny){ const d = name && DEX_MAP[name]; return d ? 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/' + (shiny ? 'shiny/' : '') + d + '.gif' : ''; }
+  // sprite ESTATICO (png) — usado na box, que pode ter milhares de pokes (gif animado travaria)
+  function sprStatic(name, shiny){ const d = name && DEX_MAP[name]; return d ? 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/' + (shiny ? 'shiny/' : '') + d + '.png' : ''; }
+  // raridade (essence) -> rank pra ordenar
+  const ESS_RANK = { 'comum':0, 'incomum':1, 'raro':2, 'ultra raro':3, 'lendario':4, 'lendário':4, 'legendary':4, 'mitico':5, 'mítico':5, 'mythic':5 };
+  function essRank(e){ if (e == null) return -1; const v = ESS_RANK[String(e).toLowerCase().trim()]; return v != null ? v : -1; }
+  function dexNum(name){ const d = name && DEX_MAP[name]; return d || 0; }
+
+  // ---- box unificada (grid de todos os pokes das 4 contas, arrastável) ----
+  let boxOpen = false, boxData = null, boxRows = [], boxSort = 'dex', boxDir = 1, boxShiny = false, boxAcc = '', boxOrder = null, boxTipEl = null;
+  let boxZoom = (function(){ const v = parseInt(localStorage.getItem('boxZoom'), 10); return (v >= 56 && v <= 128) ? v : 84; })();
+
+  function flattenBox(data){
+    const rows = [];
+    for (const acc of (data || [])) for (const p of (acc.pokes || [])) {
+      rows.push({ uid: p.uid, species: p.species, level: p.level, potential: p.potential, essence: p.essence, shiny: !!p.shiny, stored: p.stored, account: acc.name, slot: acc.slot });
+    }
+    return rows;
+  }
+  function keyOf(r){ return r.slot + ':' + r.uid; }
+  function sortRows(rows, key, dir){
+    const val = (r) => key === 'potential' ? (r.potential || 0)
+      : key === 'level' ? (r.level || 0)
+      : key === 'rarity' ? essRank(r.essence)
+      : key === 'dex' ? (dexNum(r.species) || 9999)
+      : String(r.species || '').toLowerCase();
+    return rows.slice().sort((a, b) => { const x = val(a), y = val(b); if (typeof x === 'string') return x.localeCompare(y) * dir; return (x > y ? 1 : x < y ? -1 : 0) * dir; });
+  }
+  function loadOrder(){ try { return JSON.parse(localStorage.getItem('boxOrder') || 'null'); } catch { return null; } }
+  function saveOrder(arr){ try { localStorage.setItem('boxOrder', JSON.stringify(arr)); } catch {} }
+  function ensureOrder(){
+    const keys = boxRows.map(keyOf), set = new Set(keys);
+    let order = loadOrder();
+    if (order && order.length){
+      order = order.filter(k => set.has(k));           // tira o que não existe mais
+      const have = new Set(order);
+      keys.forEach(k => { if (!have.has(k)) order.push(k); }); // adiciona pokes novos no fim
+      boxSort = null;                                   // ordem custom salva -> nenhum botão ativo
+    } else {
+      boxSort = 'dex'; boxDir = 1;
+      order = sortRows(boxRows, 'dex', 1).map(keyOf);
+    }
+    boxOrder = order; saveOrder(order);
+  }
+
+  function ensureTip(){ if (!boxTipEl){ boxTipEl = document.createElement('div'); boxTipEl.className = 'box-tip'; document.body.appendChild(boxTipEl); } return boxTipEl; }
+  function showTip(r){ if (!r) return; const t = ensureTip();
+    t.innerHTML = '<div class="tn'+(r.shiny?' box-shiny':'')+'">' + esc(r.species) + (r.shiny ? ' ✨' : '') + '</div>'
+      + '<div class="tr">Nível <b>' + (r.level != null ? r.level : '-') + '</b></div>'
+      + '<div class="tr">IV <b>' + (r.potential != null ? r.potential + '%' : '-') + '</b></div>'
+      + (r.essence ? '<div class="tr">Raridade <b>' + esc(r.essence) + '</b></div>' : '')
+      + '<div class="tr">' + esc(r.account) + '</div>';
+    t.style.display = 'block';
+  }
+  function moveTip(e){ if (!boxTipEl || boxTipEl.style.display === 'none') return; const pad = 14; let x = e.clientX + pad, y = e.clientY + pad; const w = boxTipEl.offsetWidth, h = boxTipEl.offsetHeight; if (x + w > window.innerWidth) x = e.clientX - w - pad; if (y + h > window.innerHeight) y = e.clientY - h - pad; boxTipEl.style.left = x + 'px'; boxTipEl.style.top = y + 'px'; }
+  function hideTip(){ if (boxTipEl) boxTipEl.style.display = 'none'; }
+
+  function moveInOrder(from, to){
+    const a = boxOrder.slice(); const fi = a.indexOf(from); if (fi < 0) return;
+    a.splice(fi, 1); const ti = a.indexOf(to); a.splice(ti < 0 ? a.length : ti, 0, from);
+    boxOrder = a; saveOrder(a); boxSort = null; setSortActive(); renderBoxGrid();
+  }
+  function renderBoxGrid(){
+    const grid = document.getElementById('box-grid'); if (!grid) return;
+    grid.style.setProperty('--cell', boxZoom + 'px');
+    const byKey = {}; boxRows.forEach(r => byKey[keyOf(r)] = r);
+    const vis = boxOrder.map(k => byKey[k]).filter(r => r && (!boxShiny || r.shiny) && (!boxAcc || String(r.slot) === boxAcc));
+    grid.innerHTML = vis.map(function(r){
+      const s = sprStatic(r.species, r.shiny);
+      const d = dexNum(r.species);
+      const num = d ? '#' + String(d).padStart(3, '0') : '';
+      return '<div class="box-cell" draggable="true" data-key="'+esc(keyOf(r))+'">'
+        + '<span class="box-num">' + num + '</span>'
+        + (s ? '<img src="'+s+'" loading="lazy" onerror="this.style.visibility=\'hidden\'">' : '')
+        + '<span class="box-name'+(r.shiny?' shiny':'')+'">' + esc(r.species) + '</span>'
+        + (r.shiny ? '<span class="sh">✨</span>' : '')
+        + '</div>';
+    }).join('');
+    const c = document.getElementById('box-count'); if (c) c.textContent = vis.length + ' pokémon';
+
+    let dragKey = null;
+    grid.querySelectorAll('.box-cell').forEach(function(cell){
+      cell.addEventListener('dragstart', function(e){ dragKey = cell.dataset.key; cell.classList.add('dragging'); hideTip(); if (e.dataTransfer){ e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', dragKey); } catch {} } });
+      cell.addEventListener('dragend', function(){ cell.classList.remove('dragging'); grid.querySelectorAll('.over').forEach(c => c.classList.remove('over')); });
+      cell.addEventListener('dragover', function(e){ e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; });
+      cell.addEventListener('dragenter', function(){ if (cell.dataset.key !== dragKey) cell.classList.add('over'); });
+      cell.addEventListener('dragleave', function(){ cell.classList.remove('over'); });
+      cell.addEventListener('drop', function(e){ e.preventDefault(); cell.classList.remove('over'); const from = dragKey || (e.dataTransfer && e.dataTransfer.getData('text/plain')); const to = cell.dataset.key; if (from && to && from !== to) moveInOrder(from, to); });
+      cell.addEventListener('mouseenter', function(){ showTip(byKey[cell.dataset.key]); });
+      cell.addEventListener('mousemove', moveTip);
+      cell.addEventListener('mouseleave', hideTip);
+    });
+  }
+  function setSortActive(){ const wrap = document.querySelector('.box-sort'); if (!wrap) return; wrap.querySelectorAll('.sbtn').forEach(b => b.classList.toggle('on', b.dataset.k === boxSort)); }
+  function applySort(){ boxOrder = sortRows(boxRows, boxSort, boxDir).map(keyOf); saveOrder(boxOrder); setSortActive(); renderBoxGrid(); }
+  function renderBox(){
+    const main = document.getElementById('main');
+    const accOpts = '<option value="">Todas as contas</option>' + (boxData || []).map(function(a){ return '<option value="'+a.slot+'">'+esc(a.name)+'</option>'; }).join('');
+    main.innerHTML =
+      '<div class="box-wrap">'
+        + '<div class="box-top">'
+          + '<b>📦 Box</b>'
+          + '<span class="box-count" id="box-count"></span>'
+          + '<label class="mclose"><input type="checkbox" id="box-shiny"'+(boxShiny?' checked':'')+'> só shiny ✨</label>'
+          + '<select id="box-acc">'+accOpts+'</select>'
+          + '<button class="tbtn" id="box-refresh" title="Atualizar da conta">🔄</button>'
+        + '</div>'
+        + '<div class="box-sort"><span class="lbl">Ordenar</span>'
+          + '<button class="sbtn" data-k="dex">Dex</button>'
+          + '<button class="sbtn" data-k="rarity">Raridade</button>'
+          + '<button class="sbtn" data-k="potential">Potencial</button>'
+          + '<button class="sbtn" data-k="level">Nível</button>'
+          + '<button class="sbtn" data-k="species">Espécie</button>'
+          + '<div class="box-zoom mclose"><span>🔍</span><input type="range" id="box-zoom" min="56" max="128" step="4" value="'+boxZoom+'"></div>'
+        + '</div>'
+        + '<div class="box-scroll"><div class="box-grid" id="box-grid"></div></div>'
+      + '</div>';
+    document.getElementById('box-shiny').onchange = function(){ boxShiny = this.checked; renderBoxGrid(); };
+    const accSel = document.getElementById('box-acc'); accSel.value = boxAcc; accSel.onchange = function(){ boxAcc = this.value; renderBoxGrid(); };
+    document.getElementById('box-refresh').onclick = function(){ loadBox(); };
+    document.getElementById('box-zoom').oninput = function(){ boxZoom = parseInt(this.value, 10) || 84; try { localStorage.setItem('boxZoom', boxZoom); } catch {} const g = document.getElementById('box-grid'); if (g) g.style.setProperty('--cell', boxZoom + 'px'); };
+    main.querySelectorAll('.sbtn').forEach(function(btn){ btn.onclick = function(){ const k = btn.dataset.k; if (boxSort === k) boxDir = -boxDir; else { boxSort = k; boxDir = (k === 'species' || k === 'dex') ? 1 : -1; } applySort(); }; });
+    setSortActive();
+    renderBoxGrid();
+  }
+  function loadBox(){
+    if (!P || !P.getBox) return;
+    hideTip();
+    document.getElementById('main').innerHTML = '<div class="empty">Carregando box…</div>';
+    P.getBox().then(function(d){ boxData = d || []; boxRows = flattenBox(boxData); ensureOrder(); renderBox(); })
+      .catch(function(){ document.getElementById('main').innerHTML = '<div class="empty">Não consegui carregar a box.</div>'; });
+  }
+  function toggleBox(open){
+    boxOpen = (open == null) ? !boxOpen : !!open;
+    document.getElementById('btn-box').classList.toggle('on', boxOpen);
+    if (P && P.setBoxOpen) P.setBoxOpen(boxOpen);
+    if (boxOpen) loadBox(); else { hideTip(); renderSidebar(); }
+  }
 
   function renderSidebar() {
     const side = document.getElementById('side');
@@ -106,15 +278,20 @@
       const isSel = mode === 'single' && selected === s;
       const inf = accInfo[s] || {};
       const name = inf.name || ('Tela ' + s);
-      const a = inf.active;
-      const img = a
+      const a = inf.active, p2 = inf.party2;
+      const front = a
         ? '<img class="acc-spr" src="'+spr(a.species, a.shiny)+'" onerror="this.classList.add(\'ph\');this.removeAttribute(\'src\')">'
         : '<span class="acc-spr ph"></span>';
+      const back = p2 ? '<img class="acc-spr2" src="'+spr(p2.species, p2.shiny)+'" title="2º da party" onerror="this.style.display=\'none\'">' : '';
+      const sprites = '<span class="acc-sprites">' + back + front + '</span>';
       const sub = a ? (esc(a.species) + ' Lv' + a.level + (a.shiny ? ' ✨' : '')) : 'carregando…';
+      const p2line = p2 ? '<span class="acc-p2" title="2º pokémon da party">'
+        + esc(p2.species)
+        + (p2.xpPct != null ? ' <b>XP ' + p2.xpPct + '%</b>' : '') + '</span>' : '';
       const hunt = inf.hunt ? '<span class="acc-hunt">🗺 caçando ' + esc(titce(inf.hunt)) + '</span>' : '';
       return '<button class="acc'+(isSel?' on':'')+'" data-slot="'+s+'">'
-        + img
-        + '<span class="acc-info"><span class="acc-name">'+esc(name)+'</span><span class="acc-sub'+(a&&a.shiny?' shiny':'')+'">'+sub+'</span>'+hunt+'</span>'
+        + sprites
+        + '<span class="acc-info"><span class="acc-name">'+esc(name)+'</span><span class="acc-sub'+(a&&a.shiny?' shiny':'')+'">'+sub+'</span>'+p2line+hunt+'</span>'
         + '<span class="acc-reload" data-reload="'+s+'" title="Recarregar">&#x21bb;</span>'
         + '</button>';
     }).join('');
@@ -133,7 +310,7 @@
     side.innerHTML = html;
 
     // fiação por addEventListener (sem onclick inline no HTML)
-    side.querySelectorAll('[data-slot]').forEach(b => b.addEventListener('click', () => { if (P) P.selectAccount(+b.dataset.slot); }));
+    side.querySelectorAll('[data-slot]').forEach(b => b.addEventListener('click', () => { if (boxOpen) toggleBox(false); if (P) P.selectAccount(+b.dataset.slot); }));
     side.querySelectorAll('[data-reload]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); if (P) P.reloadGame(+b.dataset.reload); }));
     const addBtn = side.querySelector('[data-action="add"]'); if (addBtn) addBtn.addEventListener('click', () => { if (P) P.addView(); });
     const rmBtn = side.querySelector('[data-action="remove"]'); if (rmBtn) rmBtn.addEventListener('click', removeLast);
@@ -147,9 +324,12 @@
       btnGrid.classList.remove('on');
     }
 
-    document.getElementById('main').innerHTML = accounts.length
-      ? ''
-      : '<div class="empty">Nenhuma tela aberta.<br>Clique em <b>+ Adicionar tela</b> para começar.</div>';
+    // enquanto a box está aberta ela ocupa o #main — não mexer
+    if (!boxOpen) {
+      document.getElementById('main').innerHTML = accounts.length
+        ? ''
+        : '<div class="empty">Nenhuma tela aberta.<br>Clique em <b>+ Adicionar tela</b> para começar.</div>';
+    }
   }
 
   if (P) {
@@ -163,7 +343,8 @@
   }
 
   document.getElementById('btn-add').onclick = function() { if (P) P.addView(); };
-  document.getElementById('btn-grid').onclick = function() { if (P) P.setGameMode('grid'); };
+  document.getElementById('btn-box').onclick = function() { toggleBox(); };
+  document.getElementById('btn-grid').onclick = function() { if (boxOpen) toggleBox(false); if (P) P.setGameMode('grid'); };
   document.getElementById('btn-min').onclick = function() { if (P) P.winMinimize(); };
   document.getElementById('btn-max').onclick = function() { if (P) P.winMaximize(); };
   document.getElementById('btn-close').onclick = function() { if (P) P.winClose(); };

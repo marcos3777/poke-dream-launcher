@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.3.0",
+    "date": "2026-07-30",
+    "changes": [
+      "Nova Box unificada (botao 📦): todos os pokemon das 4 contas numa grade so, com numero da dex, zoom ajustavel, ordenar (dex, raridade, potencial, nivel, especie), arrastar pra reordenar (a ordem fica salva), filtro de shiny e por conta",
+      "Barra da esquerda mostra o 2º pokemon da party atras do ativo, com o XP% dele ao vivo",
+      "O app reabre a mesma quantidade de telas que estava aberta da ultima vez"
+    ]
+  },
+  {
     "version": "1.2.1",
     "date": "2026-07-28",
     "changes": [
