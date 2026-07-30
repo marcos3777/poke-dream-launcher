@@ -6,7 +6,9 @@ const fs = require('fs');
 const crypto = require('crypto');
 const zlib = require('zlib');
 const { autoUpdater } = require('electron-updater');
+const aptabase = (() => { try { return require('@aptabase/electron/main'); } catch { return null; } })();
 
+const APTABASE_KEY = 'A-US-4329497099';   // analytics anônimo (usuários ativos + versão)
 const GAME_URL = 'https://pokedream.com.br/';
 const GAME_DOMAIN = 'pokedream.com.br';
 const MAXV = 4;
@@ -30,6 +32,8 @@ let boxOpen = false;         // Box unificada aberta -> esconde as telas do jogo
 let diagOn = false;      // modo diagnóstico: grava frames WS + respostas REST num dump (pra ver o que o jogo manda)
 let DUMP_FILE = null;
 let SESSION_FILE = null;   // guarda quantas telas estavam abertas, pra reabrir na próxima vez
+let SETTINGS_FILE = null;  // preferências (ex.: telemetria ligada/desligada)
+let telemetryOn = true;    // envia uso anônimo (versão/OS) pro Aptabase; usuário pode desligar
 let diagLines = 0;
 
 // ---- diagnóstico: captura de rede (só grava quando diagOn) ----
@@ -437,11 +441,19 @@ function loadSessionCount() {
   return 1;
 }
 
+// ---- preferências + telemetria anônima (Aptabase) ----
+function loadSettings() { try { const j = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); telemetryOn = j.telemetry !== false; } catch { telemetryOn = true; } }
+function saveSettings() { try { if (SETTINGS_FILE) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ telemetry: telemetryOn })); } catch {} }
+function track(name, props) { if (!telemetryOn || !aptabase) return; try { aptabase.trackEvent(name, props); } catch {} }
+
 function createWindow() {
   storageDir = path.join(app.getPath('userData'), 'storage');
   fs.mkdirSync(storageDir, { recursive: true });
   DUMP_FILE = path.join(app.getPath('userData'), 'ws-dump.jsonl');
   SESSION_FILE = path.join(app.getPath('userData'), 'session.json');
+  SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
+  loadSettings();
+  if (aptabase) { try { aptabase.initialize(APTABASE_KEY); } catch {} }
 
   win = new BaseWindow({
     width: 1400, height: 860,
@@ -530,6 +542,9 @@ ipcMain.handle('openDumpFolder', () => {
   try { if (DUMP_FILE && fs.existsSync(DUMP_FILE)) shell.showItemInFolder(DUMP_FILE); else shell.openPath(app.getPath('userData')); } catch {}
 });
 
+ipcMain.handle('getTelemetry', () => telemetryOn);
+ipcMain.handle('setTelemetry', (_e, on) => { telemetryOn = !!on; saveSettings(); return telemetryOn; });
+
 // ---- auto-update (via GitHub Releases) ----
 ipcMain.handle('getVersion', () => app.getVersion());
 ipcMain.handle('checkForUpdate', () => {
@@ -594,6 +609,9 @@ app.whenReady().then(() => {
   createWindow();
   // espera a UI carregar antes de checar (pra não perder os eventos de status)
   dashView.webContents.once('did-finish-load', () => setTimeout(setupAutoUpdate, 1500));
+  // telemetria: 1 evento no boot + heartbeat a cada 12h (pra contar usuários ativos por versão)
+  track('app_opened');
+  setInterval(() => track('app_heartbeat'), 12 * 60 * 60 * 1000);
   app.on('activate', () => { if (BaseWindow.getAllWindows().length === 0) createWindow(); });
 });
 

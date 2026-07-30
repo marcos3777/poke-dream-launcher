@@ -41,6 +41,10 @@
   <div class="status" id="status"></div>
 
   <div class="sep"></div>
+  <label class="chk" title="Envia so a versao do app e o sistema operacional, de forma anonima. Nao coleta login, senha nem dados do jogo."><input type="checkbox" id="telemetry"> 📊 Enviar uso anonimo (versao/OS)</label>
+  <div class="status" style="margin-top:-4px">Ajuda a saber quantas pessoas usam o app e em qual versao. Anonimo, sem login/senha. Pode desligar aqui.</div>
+
+  <div class="sep"></div>
   <label class="chk" title="Grava os frames de rede (WebSocket + respostas /api/) num arquivo, pra analisar o que o jogo manda."><input type="checkbox" id="diag"> 🛠 Gravar dump de diagnostico</label>
   <button class="btn" id="dumpfolder">📂 Abrir pasta do dump</button>
   <div class="status" id="diag-status"></div>
@@ -65,6 +69,11 @@
     P.checkForUpdate();
   };
   install.onclick = function(){ if (P && P.installUpdate) P.installUpdate(); };
+
+  // ---- telemetria (uso anonimo) ----
+  const telemetry = document.getElementById('telemetry');
+  if (P && P.getTelemetry) P.getTelemetry().then(function(on){ telemetry.checked = on !== false; });
+  telemetry.onchange = function(){ if (P && P.setTelemetry) P.setTelemetry(telemetry.checked); };
 
   // ---- diagnostico (dump) ----
   const diag = document.getElementById('diag');
