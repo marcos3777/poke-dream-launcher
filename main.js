@@ -34,6 +34,9 @@ let DUMP_FILE = null;
 let SESSION_FILE = null;   // guarda quantas telas estavam abertas, pra reabrir na próxima vez
 let SETTINGS_FILE = null;  // preferências (ex.: telemetria ligada/desligada)
 let telemetryOn = true;    // envia uso anônimo (versão/OS) pro Aptabase; usuário pode desligar
+let soundEnabled = true;   // tocar som ao capturar shiny
+let soundVolume = 0.8;     // 0..1
+let soundPath = null;      // caminho de um áudio do PC do usuário; null = som padrão embutido
 let diagLines = 0;
 
 // ---- diagnóstico: captura de rede (só grava quando diagOn) ----
@@ -92,24 +95,38 @@ function refreshActive(g) {
   g._sig = sig; g.active = active; g.party2 = party2;
   return true;
 }
+// reconstrói o box a partir do array completo (vem em /offline e tbm no /save quando há captura)
+// e detecta shiny NOVO -> dispara o som. Baseline: o 1º box visto (carga) não toca nada.
+function rebuildBox(g, boxArr) {
+  g._box = {};
+  for (const p of boxArr) if (p && p.uid != null) g._box[p.uid] = { uid: p.uid, species: p.species, level: p.level, xp: p.xp, shiny: !!p.shiny, potential: p.potential, essence: p.essence, stored: p.stored };
+  checkShinyCaptures(g);
+}
+function checkShinyCaptures(g) {
+  const known = g._shinyUids || (g._shinyUids = new Set());
+  const first = !g._baselineDone;
+  const fresh = [];
+  for (const uid in g._box) { const p = g._box[uid]; if (p && p.shiny && !known.has(uid)) { known.add(uid); if (!first) fresh.push(p); } }
+  g._baselineDone = true;
+  if (!first) for (const p of fresh) { track('shiny_caught', { species: p.species }); if (dashView) send(dashView, 'shiny-caught', { slot: g.slot, species: p.species }); }
+}
 function applyState(g, state) {   // estado COMPLETO (/offline ou /save cheio): guarda o box e o ativo
   if (!state) return false;
   const prog = state.progress || state;
   let changed = false;
   if (state.huntId != null && state.huntId !== g.hunt) { g.hunt = state.huntId; changed = true; }
-  if (Array.isArray(prog.box)) {
-    g._box = {}; for (const p of prog.box) if (p && p.uid != null) g._box[p.uid] = { uid: p.uid, species: p.species, level: p.level, xp: p.xp, shiny: !!p.shiny, potential: p.potential, essence: p.essence, stored: p.stored };
-  }
+  if (Array.isArray(prog.box)) rebuildBox(g, prog.box);
   if (Array.isArray(prog.party)) g._party = prog.party.slice();
   if (prog.activeUid != null) g._activeUid = prog.activeUid;
   if (refreshActive(g)) changed = true;
   return changed;
 }
-function applyPatch(g, patch) {   // delta descomprimido: campos que MUDARAM (activeUid na troca, huntId, boxDelta com xp)
+function applyPatch(g, patch) {   // delta descomprimido: campos que MUDARAM (activeUid, huntId, boxDelta com xp, box cheio na captura)
   let changed = false;
   if (patch.huntId != null && patch.huntId !== g.hunt) { g.hunt = patch.huntId; changed = true; }
-  if (patch.boxDelta && g._box) for (const uid in patch.boxDelta) { const d = patch.boxDelta[uid], e = g._box[uid]; if (e && d) { if (d.level != null) e.level = d.level; if (d.xp != null) e.xp = d.xp; } }
   const prog = patch.progress || {};
+  if (Array.isArray(prog.box)) rebuildBox(g, prog.box);   // captura online reenvia o box inteiro aqui
+  else if (patch.boxDelta && g._box) for (const uid in patch.boxDelta) { const d = patch.boxDelta[uid], e = g._box[uid]; if (e && d) { if (d.level != null) e.level = d.level; if (d.xp != null) e.xp = d.xp; } }
   if (Array.isArray(prog.party)) g._party = prog.party.slice();
   if (prog.activeUid != null) g._activeUid = prog.activeUid;
   if (refreshActive(g)) changed = true;
@@ -442,9 +459,31 @@ function loadSessionCount() {
 }
 
 // ---- preferências + telemetria anônima (Aptabase) ----
-function loadSettings() { try { const j = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); telemetryOn = j.telemetry !== false; } catch { telemetryOn = true; } }
-function saveSettings() { try { if (SETTINGS_FILE) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ telemetry: telemetryOn })); } catch {} }
+function loadSettings() {
+  try {
+    const j = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+    telemetryOn = j.telemetry !== false;
+    soundEnabled = j.soundEnabled !== false;
+    if (typeof j.soundVolume === 'number') soundVolume = Math.max(0, Math.min(1, j.soundVolume));
+    soundPath = (typeof j.soundPath === 'string' && j.soundPath) ? j.soundPath : null;
+  } catch { telemetryOn = true; soundEnabled = true; soundVolume = 0.8; soundPath = null; }
+}
+function saveSettings() { try { if (SETTINGS_FILE) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ telemetry: telemetryOn, soundEnabled, soundVolume, soundPath })); } catch {} }
 function track(name, props) { if (!telemetryOn || !aptabase) return; try { aptabase.trackEvent(name, props); } catch {} }
+
+// ---- som (shiny capturado) ----
+const DEFAULT_SOUND = path.join(__dirname, 'sounds', 'shiny-default.mp3');
+function currentSoundFile() { return (soundPath && fs.existsSync(soundPath)) ? soundPath : DEFAULT_SOUND; }
+function soundName() { return soundPath ? path.basename(soundPath) : 'Padrão'; }
+function soundDataUrl() {   // devolve o áudio como data URL (a dashView toca isso)
+  try {
+    const f = currentSoundFile(); const buf = fs.readFileSync(f);
+    const ext = path.extname(f).toLowerCase();
+    const mime = ext === '.wav' ? 'audio/wav' : ext === '.ogg' ? 'audio/ogg' : ext === '.m4a' ? 'audio/mp4' : 'audio/mpeg';
+    return 'data:' + mime + ';base64,' + buf.toString('base64');
+  } catch { return null; }
+}
+function pushSoundConfig() { if (dashView) send(dashView, 'sound-config', { enabled: soundEnabled, volume: soundVolume, dataUrl: soundDataUrl() }); }
 
 function createWindow() {
   storageDir = path.join(app.getPath('userData'), 'storage');
@@ -545,6 +584,20 @@ ipcMain.handle('openDumpFolder', () => {
 ipcMain.handle('getTelemetry', () => telemetryOn);
 ipcMain.handle('setTelemetry', (_e, on) => { telemetryOn = !!on; saveSettings(); return telemetryOn; });
 
+// ---- som ----
+ipcMain.handle('getSoundSettings', () => ({ enabled: soundEnabled, volume: soundVolume, name: soundName(), custom: !!soundPath }));
+ipcMain.handle('setSoundEnabled', (_e, on) => { soundEnabled = !!on; saveSettings(); pushSoundConfig(); return soundEnabled; });
+ipcMain.handle('setSoundVolume', (_e, v) => { const n = Number(v); if (Number.isFinite(n)) soundVolume = Math.max(0, Math.min(1, n)); saveSettings(); pushSoundConfig(); return soundVolume; });
+ipcMain.handle('pickSoundFile', async () => {
+  try {
+    const r = await dialog.showOpenDialog(win, { title: 'Escolher som', properties: ['openFile'], filters: [{ name: 'Áudio', extensions: ['mp3', 'wav', 'ogg', 'm4a'] }] });
+    if (!r.canceled && r.filePaths && r.filePaths[0]) { soundPath = r.filePaths[0]; saveSettings(); pushSoundConfig(); }
+  } catch {}
+  return { name: soundName(), custom: !!soundPath };
+});
+ipcMain.handle('resetSound', () => { soundPath = null; saveSettings(); pushSoundConfig(); return { name: soundName(), custom: false }; });
+ipcMain.handle('testSound', () => { if (dashView) send(dashView, 'play-sound', { dataUrl: soundDataUrl(), volume: soundVolume }); });
+
 // ---- auto-update (via GitHub Releases) ----
 ipcMain.handle('getVersion', () => app.getVersion());
 ipcMain.handle('checkForUpdate', () => {
@@ -608,7 +661,7 @@ function setupAutoUpdate() {
 app.whenReady().then(() => {
   createWindow();
   // espera a UI carregar antes de checar (pra não perder os eventos de status)
-  dashView.webContents.once('did-finish-load', () => setTimeout(setupAutoUpdate, 1500));
+  dashView.webContents.once('did-finish-load', () => { setTimeout(setupAutoUpdate, 1500); pushSoundConfig(); });
   // telemetria: 1 evento no boot + heartbeat a cada 12h (pra contar usuários ativos por versão)
   track('app_opened');
   setInterval(() => track('app_heartbeat'), 12 * 60 * 60 * 1000);

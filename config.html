@@ -35,6 +35,7 @@
 <body>
   <div class="h"><span class="t">⚙ Configuracoes</span><button class="x" id="x" title="Fechar">✕</button></div>
   <div class="row">Versao instalada: <b id="ver">—</b></div>
+  <button class="btn" id="sound-btn">🔊 Som</button>
   <button class="btn" id="changelog-btn">📋 Novidades (o que mudou)</button>
   <button class="btn" id="check">🔄 Verificar atualizacao</button>
   <button class="btn on" id="install" style="display:none">↻ Reiniciar e instalar</button>
@@ -52,6 +53,20 @@
   <div class="cl-panel" id="changelog">
     <div class="h"><button class="x" id="cl-back" title="Voltar" style="margin-left:0;margin-right:8px">←</button><span class="t">📋 Novidades</span></div>
     <div class="cl-body" id="cl-body">carregando…</div>
+  </div>
+
+  <div class="cl-panel" id="sound">
+    <div class="h"><button class="x" id="snd-back" title="Voltar" style="margin-left:0;margin-right:8px">←</button><span class="t">🔊 Som</span></div>
+    <div class="cl-body">
+      <label class="chk" style="margin-top:2px"><input type="checkbox" id="snd-enabled"> 🌟 Tocar som ao capturar shiny</label>
+      <div class="row" style="margin-bottom:6px">Volume</div>
+      <input type="range" id="snd-volume" min="0" max="100" step="1" style="width:100%;accent-color:var(--gold);cursor:pointer;margin-bottom:12px">
+      <div class="row">Som atual: <b id="snd-name">—</b></div>
+      <button class="btn" id="snd-test">▶ Testar</button>
+      <button class="btn" id="snd-pick">📂 Escolher áudio do PC…</button>
+      <button class="btn" id="snd-reset">↺ Restaurar som padrão</button>
+      <div class="status">Aceita mp3, wav, ogg ou m4a. O som toca quando qualquer uma das suas telas captura um shiny.</div>
+    </div>
   </div>
 <script>
   const P = window.poke || null;
@@ -87,6 +102,28 @@
       : 'Parado. Clique em "Abrir pasta do dump" pra pegar o arquivo.';
   };
   document.getElementById('dumpfolder').onclick = function(){ if (P && P.openDumpFolder) P.openDumpFolder(); };
+
+  // ---- som ----
+  const sound = document.getElementById('sound');
+  const sndEnabled = document.getElementById('snd-enabled');
+  const sndVolume = document.getElementById('snd-volume');
+  const sndName = document.getElementById('snd-name');
+  function refreshSound() {
+    if (!P || !P.getSoundSettings) return;
+    P.getSoundSettings().then(function(s){
+      if (!s) return;
+      sndEnabled.checked = s.enabled !== false;
+      sndVolume.value = Math.round((s.volume != null ? s.volume : 0.8) * 100);
+      sndName.textContent = s.name || 'Padrão';
+    });
+  }
+  document.getElementById('sound-btn').onclick = function(){ sound.classList.add('show'); refreshSound(); };
+  document.getElementById('snd-back').onclick = function(){ sound.classList.remove('show'); };
+  sndEnabled.onchange = function(){ if (P && P.setSoundEnabled) P.setSoundEnabled(sndEnabled.checked); };
+  sndVolume.oninput = function(){ if (P && P.setSoundVolume) P.setSoundVolume((parseInt(sndVolume.value, 10) || 0) / 100); };
+  document.getElementById('snd-test').onclick = function(){ if (P && P.testSound) P.testSound(); };
+  document.getElementById('snd-pick').onclick = function(){ if (P && P.pickSoundFile) P.pickSoundFile().then(function(r){ if (r) sndName.textContent = r.name; }); };
+  document.getElementById('snd-reset').onclick = function(){ if (P && P.resetSound) P.resetSound().then(function(r){ if (r) sndName.textContent = r.name; }); };
 
   // ---- novidades (changelog) ----
   function esc(s){ return String(s==null?'':s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }

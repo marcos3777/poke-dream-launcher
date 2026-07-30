@@ -364,6 +364,22 @@
   function removeLast() {
     if (accounts.length > 0 && P) P.removeView(accounts[accounts.length - 1]);
   }
+
+  // ---- som ao capturar shiny (a dashView é dona da reprodução; toca mesmo com o config fechado) ----
+  let sndEnabled = true, sndVolume = 0.8, sndAudio = null;
+  function playSound(dataUrl, volume) {
+    const url = dataUrl || (sndAudio && sndAudio.src);
+    if (!url) return;
+    try { const a = new Audio(url); a.volume = Math.max(0, Math.min(1, volume != null ? volume : sndVolume)); a.play().catch(function(){}); } catch {}
+  }
+  if (P && P.onSoundConfig) P.onSoundConfig(function(cfg){
+    if (!cfg) return;
+    sndEnabled = cfg.enabled !== false;
+    if (typeof cfg.volume === 'number') sndVolume = cfg.volume;
+    if (cfg.dataUrl) { sndAudio = new Audio(cfg.dataUrl); }   // pré-carrega o áudio atual
+  });
+  if (P && P.onShinyCaught) P.onShinyCaught(function(){ if (sndEnabled) playSound(null, sndVolume); });
+  if (P && P.onPlaySound) P.onPlaySound(function(p){ playSound(p && p.dataUrl, p && p.volume); });   // botão testar (ignora o enabled)
 </script>
 </body>
 </html>
