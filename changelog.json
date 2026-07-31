@@ -1,17 +1,17 @@
 [
   {
+    "version": "1.3.3",
+    "date": "2026-07-30",
+    "changes": [
+      "As atualizacoes agora instalam sozinhas, sem abrir a tela do instalador"
+    ]
+  },
+  {
     "version": "1.3.2",
     "date": "2026-07-30",
     "changes": [
       "Novo menu 'Som': toca um som quando qualquer uma das suas telas captura um shiny",
       "Da pra escolher um audio do seu PC (mp3, wav, ogg, m4a), ajustar o volume, ligar/desligar e testar"
-    ]
-  },
-  {
-    "version": "1.3.1",
-    "date": "2026-07-30",
-    "changes": [
-      "Envia info de performance de forma anonima (so a versao do app e o sistema operacional) pra ajudar a melhorar. Nao coleta login, senha nem dados do jogo. Da pra desligar aqui no rodape das Novidades."
     ]
   },
   {

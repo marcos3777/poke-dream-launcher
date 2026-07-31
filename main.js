@@ -492,7 +492,6 @@ function createWindow() {
   SESSION_FILE = path.join(app.getPath('userData'), 'session.json');
   SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
   loadSettings();
-  if (aptabase) { try { aptabase.initialize(APTABASE_KEY); } catch {} }
 
   win = new BaseWindow({
     width: 1400, height: 860,
@@ -658,6 +657,10 @@ function setupAutoUpdate() {
     }
   } catch (e) { console.error('[updater] falha ao iniciar:', e && e.message); }
 }
+
+// IMPORTANTE: o Aptabase EXIGE initialize ANTES do app ficar pronto, senão ele desabilita o envio.
+// (ele espera o whenReady internamente.) O envio de fato ainda é controlado pelo track()/telemetryOn.
+if (aptabase) { try { aptabase.initialize(APTABASE_KEY); } catch {} }
 
 app.whenReady().then(() => {
   createWindow();
