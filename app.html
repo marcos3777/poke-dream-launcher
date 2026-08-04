@@ -43,6 +43,8 @@
     border:1px solid var(--line); background:var(--panel); color:var(--txt); cursor:pointer; text-align:left;
     font-size:12.5px; font-weight:700; width:100%; transition:border-color .15s,background .15s; }
   .acc:hover{ background:#1a2231; } .acc.on{ border-color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset; background:#1a1e0b; }
+  .acc.dragging{ opacity:.4; }
+  .acc.drag-over{ border-color:var(--gold); box-shadow:0 -2px 0 var(--gold) inset; }
   .acc-sprites{ position:relative; width:56px; height:44px; flex:0 0 56px; }
   .acc-spr{ position:absolute; right:0; bottom:0; width:42px; height:42px; object-fit:contain; image-rendering:pixelated; z-index:2; }
   .acc-spr.ph{ right:0; bottom:0; width:42px; height:42px; background:var(--panel2); border-radius:8px; border:1px solid var(--line2); }
@@ -289,7 +291,7 @@
         + esc(p2.species)
         + (p2.xpPct != null ? ' <b>XP ' + p2.xpPct + '%</b>' : '') + '</span>' : '';
       const hunt = inf.hunt ? '<span class="acc-hunt">🗺 caçando ' + esc(titce(inf.hunt)) + '</span>' : '';
-      return '<button class="acc'+(isSel?' on':'')+'" data-slot="'+s+'">'
+      return '<button class="acc'+(isSel?' on':'')+'" draggable="true" data-slot="'+s+'">'
         + sprites
         + '<span class="acc-info"><span class="acc-name">'+esc(name)+'</span><span class="acc-sub'+(a&&a.shiny?' shiny':'')+'">'+sub+'</span>'+p2line+hunt+'</span>'
         + '<span class="acc-reload" data-reload="'+s+'" title="Recarregar">&#x21bb;</span>'
@@ -312,6 +314,27 @@
     // fiação por addEventListener (sem onclick inline no HTML)
     side.querySelectorAll('[data-slot]').forEach(b => b.addEventListener('click', () => { if (boxOpen) toggleBox(false); if (P) P.selectAccount(+b.dataset.slot); }));
     side.querySelectorAll('[data-reload]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); if (P) P.reloadGame(+b.dataset.reload); }));
+
+    // arrastar os cards pra reordenar as contas (reordena as telas do jogo junto)
+    let dragSlot = null;
+    side.querySelectorAll('.acc').forEach(function(card){
+      card.addEventListener('dragstart', function(e){ dragSlot = +card.dataset.slot; card.classList.add('dragging'); if (e.dataTransfer){ e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', String(dragSlot)); } catch {} } });
+      card.addEventListener('dragend', function(){ card.classList.remove('dragging'); side.querySelectorAll('.acc.drag-over').forEach(c => c.classList.remove('drag-over')); });
+      card.addEventListener('dragover', function(e){ e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; });
+      card.addEventListener('dragenter', function(){ if (+card.dataset.slot !== dragSlot) card.classList.add('drag-over'); });
+      card.addEventListener('dragleave', function(){ card.classList.remove('drag-over'); });
+      card.addEventListener('drop', function(e){
+        e.preventDefault(); card.classList.remove('drag-over');
+        const from = dragSlot != null ? dragSlot : (e.dataTransfer && +e.dataTransfer.getData('text/plain'));
+        const to = +card.dataset.slot;
+        if (from == null || Number.isNaN(from) || from === to) return;
+        const order = accounts.slice();
+        const fi = order.indexOf(from); if (fi < 0) return;
+        order.splice(fi, 1);
+        const ti = order.indexOf(to); order.splice(ti < 0 ? order.length : ti, 0, from);
+        if (P && P.reorderViews) P.reorderViews(order);   // main reordena as telas e reenvia o payload -> re-render
+      });
+    });
     const addBtn = side.querySelector('[data-action="add"]'); if (addBtn) addBtn.addEventListener('click', () => { if (P) P.addView(); });
     const rmBtn = side.querySelector('[data-action="remove"]'); if (rmBtn) rmBtn.addEventListener('click', removeLast);
 

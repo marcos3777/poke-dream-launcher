@@ -556,6 +556,18 @@ ipcMain.handle('setGameMode', async (_e, mode) => {
   layout();
   send(dashView, 'accounts', buildAccountsPayload());
 });
+// reordena as telas conforme a ordem dos cards arrastados na barra
+ipcMain.handle('reorderViews', (_e, orderedSlots) => {
+  if (!Array.isArray(orderedSlots)) return activeSlots();
+  const bySlot = new Map(games.map(g => [g.slot, g]));
+  const next = [];
+  for (const s of orderedSlots) { const g = bySlot.get(+s); if (g && !next.includes(g)) next.push(g); }
+  for (const g of games) if (!next.includes(g)) next.push(g);   // garante que nada se perca
+  if (next.length === games.length) { games.length = 0; games.push(...next); }
+  layout();
+  send(dashView, 'accounts', buildAccountsPayload());
+  return activeSlots();
+});
 ipcMain.handle('winMinimize', async () => { if (win) win.minimize(); });
 ipcMain.handle('winMaximize', async () => { if (win) win.isMaximized() ? win.unmaximize() : win.maximize(); });
 ipcMain.handle('winClose', async () => { app.quit(); });
@@ -581,8 +593,6 @@ ipcMain.handle('openDumpFolder', () => {
 });
 
 ipcMain.handle('isDev', () => !app.isPackaged);
-ipcMain.handle('getTelemetry', () => telemetryOn);
-ipcMain.handle('setTelemetry', (_e, on) => { telemetryOn = !!on; saveSettings(); return telemetryOn; });
 
 // ---- som ----
 ipcMain.handle('getSoundSettings', () => ({ enabled: soundEnabled, volume: soundVolume, name: soundName(), custom: !!soundPath }));

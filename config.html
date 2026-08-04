@@ -135,19 +135,10 @@
         return '<div class="cl-v"><div class="cl-ver">v'+esc(v.version)+(v.date?' <span class="cl-date">'+esc(v.date)+'</span>':'')+'</div><ul>'+
           (v.changes||[]).map(function(c){ return '<li>'+esc(c)+'</li>'; }).join('')+'</ul></div>';
       }).join('') : '<div class="cl-empty">Sem novidades ainda.</div>';
-      clBody.innerHTML = body + telemetryFooter();
-      wireTelemetry();
+      clBody.innerHTML = body;
     }).catch(function(){ clBody.innerHTML = '<div class="cl-empty">Nao consegui carregar as novidades.</div>'; });
   };
   document.getElementById('cl-back').onclick = function(){ changelog.classList.remove('show'); };
-
-  // toggle de dados fica no rodape das Novidades (discreto, so aparece apos rolar tudo)
-  function telemetryFooter(){ return '<div class="sep"></div><label class="chk" style="margin-bottom:2px"><input type="checkbox" id="telemetry"> Enviar info de performance</label>'; }
-  function wireTelemetry(){
-    const tel = document.getElementById('telemetry'); if (!tel || !P) return;
-    if (P.getTelemetry) P.getTelemetry().then(function(on){ tel.checked = on !== false; });
-    tel.onchange = function(){ if (P.setTelemetry) P.setTelemetry(tel.checked); };
-  }
 
   if (P && P.onUpdateStatus) P.onUpdateStatus(function(s){
     if (!s) return;
