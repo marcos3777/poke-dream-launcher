@@ -6,9 +6,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const zlib = require('zlib');
 const { autoUpdater } = require('electron-updater');
-const aptabase = (() => { try { return require('@aptabase/electron/main'); } catch { return null; } })();
 
-const APTABASE_KEY = 'A-US-4329497099';   // analytics anônimo (usuários ativos + versão)
 const GAME_URL = 'https://pokedream.com.br/';
 const GAME_DOMAIN = 'pokedream.com.br';
 const MAXV = 4;
@@ -32,8 +30,7 @@ let boxOpen = false;         // Box unificada aberta -> esconde as telas do jogo
 let diagOn = false;      // modo diagnóstico: grava frames WS + respostas REST num dump (pra ver o que o jogo manda)
 let DUMP_FILE = null;
 let SESSION_FILE = null;   // guarda quantas telas estavam abertas, pra reabrir na próxima vez
-let SETTINGS_FILE = null;  // preferências (ex.: telemetria ligada/desligada)
-let telemetryOn = true;    // envia uso anônimo (versão/OS) pro Aptabase; usuário pode desligar
+let SETTINGS_FILE = null;  // preferências (som)
 let soundEnabled = true;   // tocar som ao capturar shiny
 let soundVolume = 0.8;     // 0..1
 let soundPath = null;      // caminho de um áudio do PC do usuário; null = som padrão embutido
@@ -108,7 +105,7 @@ function checkShinyCaptures(g) {
   const fresh = [];
   for (const uid in g._box) { const p = g._box[uid]; if (p && p.shiny && !known.has(uid)) { known.add(uid); if (!first) fresh.push(p); } }
   g._baselineDone = true;
-  if (!first) for (const p of fresh) { track('shiny_caught', { species: p.species }); if (dashView) send(dashView, 'shiny-caught', { slot: g.slot, species: p.species }); }
+  if (!first && dashView) for (const p of fresh) send(dashView, 'shiny-caught', { slot: g.slot, species: p.species });
 }
 function applyState(g, state) {   // estado COMPLETO (/offline ou /save cheio): guarda o box e o ativo
   if (!state) return false;
@@ -458,18 +455,16 @@ function loadSessionCount() {
   return 1;
 }
 
-// ---- preferências + telemetria anônima (Aptabase) ----
+// ---- preferências (som) ----
 function loadSettings() {
   try {
     const j = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
-    telemetryOn = j.telemetry !== false;
     soundEnabled = j.soundEnabled !== false;
     if (typeof j.soundVolume === 'number') soundVolume = Math.max(0, Math.min(1, j.soundVolume));
     soundPath = (typeof j.soundPath === 'string' && j.soundPath) ? j.soundPath : null;
-  } catch { telemetryOn = true; soundEnabled = true; soundVolume = 0.8; soundPath = null; }
+  } catch { soundEnabled = true; soundVolume = 0.8; soundPath = null; }
 }
-function saveSettings() { try { if (SETTINGS_FILE) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ telemetry: telemetryOn, soundEnabled, soundVolume, soundPath })); } catch {} }
-function track(name, props) { if (!telemetryOn || !aptabase) return; try { aptabase.trackEvent(name, props); } catch {} }
+function saveSettings() { try { if (SETTINGS_FILE) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ soundEnabled, soundVolume, soundPath })); } catch {} }
 
 // ---- som (shiny capturado) ----
 const DEFAULT_SOUND = path.join(__dirname, 'sounds', 'shiny-default.mp3');
@@ -668,17 +663,10 @@ function setupAutoUpdate() {
   } catch (e) { console.error('[updater] falha ao iniciar:', e && e.message); }
 }
 
-// IMPORTANTE: o Aptabase EXIGE initialize ANTES do app ficar pronto, senão ele desabilita o envio.
-// (ele espera o whenReady internamente.) O envio de fato ainda é controlado pelo track()/telemetryOn.
-if (aptabase) { try { aptabase.initialize(APTABASE_KEY); } catch {} }
-
 app.whenReady().then(() => {
   createWindow();
   // espera a UI carregar antes de checar (pra não perder os eventos de status)
   dashView.webContents.once('did-finish-load', () => { setTimeout(setupAutoUpdate, 1500); pushSoundConfig(); });
-  // telemetria: 1 evento no boot + heartbeat a cada 12h (pra contar usuários ativos por versão)
-  track('app_opened');
-  setInterval(() => track('app_heartbeat'), 12 * 60 * 60 * 1000);
   app.on('activate', () => { if (BaseWindow.getAllWindows().length === 0) createWindow(); });
 });
 
