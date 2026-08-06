@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.5.1",
+    "date": "2026-08-06",
+    "changes": [
+      "Corrige a contagem de bolas no historico por especie: o jogo so manda a mochila quando ela muda, e boa parte das bolas jogadas nao estava sendo contada (aparecia so um terco do real)",
+      "Corrige tambem as capturas que ficavam sem bola atribuida — agora nenhuma se perde, entao a taxa de captura por bola fica correta",
+      "O historico acumulado comeca do zero nesta versao, porque os numeros antigos estavam subestimados"
+    ]
+  },
+  {
     "version": "1.5.0",
     "date": "2026-08-06",
     "changes": [

@@ -150,8 +150,10 @@ function accumulateHuntLog(g, prog, s) {
   const sp = s.huntSpecies;
   const prev = g._accPrev;
   const now = Date.now();
+  // a bag só vem no /save quando muda; sem isso a leitura viraria null e o delta seguinte se perdia
+  const bag = prog.bag || g._bag;
   const cur = { ts: now, species: sp, kills: s.kills, caught: s.totalCaught, shinies: s.shinyKills,
-                ballA: prog.bag ? sumBalls(prog.bag, BALL_A) : null, ballB: prog.bag ? sumBalls(prog.bag, BALL_B) : null };
+                ballA: bag ? sumBalls(bag, BALL_A) : null, ballB: bag ? sumBalls(bag, BALL_B) : null };
   g._accPrev = cur;
   if (!sp || !prev || prev.species !== sp) return;   // trocou de hunt (ou 1ª leitura): só reinicia a referência
 
@@ -168,20 +170,29 @@ function accumulateHuntLog(g, prog, s) {
   const tA = (cur.ballA != null && prev.ballA != null) ? Math.max(prev.ballA - cur.ballA, 0) : 0;
   const tB = (cur.ballB != null && prev.ballB != null) ? Math.max(prev.ballB - cur.ballB, 0) : 0;
   e.thrownA += tA; e.thrownB += tB;
-  // atribui as capturas ao grupo que gastou bola na janela (se os dois gastaram, divide proporcional)
-  if (dCaught && (tA || tB)) {
-    if (!tA) e.caughtB += dCaught;
-    else if (!tB) e.caughtA += dCaught;
-    else { const a = dCaught * tA / (tA + tB); e.caughtA += a; e.caughtB += dCaught - a; }
+  // Atribui as capturas ao grupo que gastou bola. Se a captura caiu numa janela sem leitura de
+  // bag, fica pendente e entra na próxima que tiver — assim nenhuma captura se perde.
+  if (dCaught) e.pend = (e.pend || 0) + dCaught;
+  if (e.pend && (tA || tB)) {
+    const p = e.pend; e.pend = 0;
+    if (!tA) e.caughtB += p;
+    else if (!tB) e.caughtA += p;
+    else { const a = p * tA / (tA + tB); e.caughtA += a; e.caughtB += p - a; }
   }
   if (dKills || dCaught || dShiny || tA || tB) { e.updated = now; huntLogDirty = true; }
 }
+// v2: antes da correção a contagem de bolas perdia deltas (a bag só vem no /save quando muda),
+// então o histórico ficava subestimado. Versão diferente = começa limpo.
+const HUNTLOG_V = 2;
 function loadHuntLog() {
-  try { const j = JSON.parse(fs.readFileSync(HUNTLOG_FILE, 'utf8')); if (j && typeof j === 'object') huntLog = j; } catch { huntLog = {}; }
+  try {
+    const j = JSON.parse(fs.readFileSync(HUNTLOG_FILE, 'utf8'));
+    huntLog = (j && j.v === HUNTLOG_V && j.data && typeof j.data === 'object') ? j.data : {};
+  } catch { huntLog = {}; }
 }
 function saveHuntLog() {
   if (!huntLogDirty || !HUNTLOG_FILE) return;
-  try { fs.writeFileSync(HUNTLOG_FILE, JSON.stringify(huntLog)); huntLogDirty = false; } catch {}
+  try { fs.writeFileSync(HUNTLOG_FILE, JSON.stringify({ v: HUNTLOG_V, data: huntLog })); huntLogDirty = false; } catch {}
 }
 function applyState(g, state) {   // estado COMPLETO (/offline ou /save cheio): guarda o box e o ativo
   if (!state) return false;
