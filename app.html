@@ -512,8 +512,8 @@
     const ratio = (tot, ev, un) => ev ? '1 <span class="un">a cada</span> ' + fmtInt(Math.round(tot / ev)) + ' <span class="un">'+un+'</span>' : '—';
     const props = '<div class="hl-sec">Proporções</div><div class="hl-rows">'
       + row('Captura', ratio(d.kills, d.caught, 'encontros'), 'g')
-      + row('Shiny (por encontro)', ratio(d.kills, d.shinies, 'encontros'), 'g')
-      + row('Shiny (por bola)', ratio(thrown, d.shinies, 'bolas'), 'g')
+      + row('Shiny', ratio(d.kills, d.shinies, 'encontros'), 'g')
+      + row('Sem shiny há', fmtInt(d.dryBalls || 0) + ' <span class="un">bolas</span>', (d.dryBalls || 0) ? 'g' : 'dim')
       + row('Bolas por captura', d.caught ? (Math.round(thrown / d.caught * 10) / 10).toLocaleString('pt-BR') : '—')
       + row('Bolas por encontro', d.kills ? (Math.round(thrown / d.kills * 100) / 100).toLocaleString('pt-BR') : '—')
       + row('Total de bolas jogadas', fmtInt(thrown))

@@ -144,7 +144,7 @@ let huntLog = {}, huntLogDirty = false;
 
 function sumBalls(bag, keys) { let n = 0; for (const k of keys) n += (bag && bag[k]) || 0; return n; }
 function huntEntry(sp) {
-  return huntLog[sp] || (huntLog[sp] = { ms: 0, kills: 0, caught: 0, shinies: 0, thrownA: 0, thrownB: 0, caughtA: 0, caughtB: 0, updated: 0 });
+  return huntLog[sp] || (huntLog[sp] = { ms: 0, kills: 0, caught: 0, shinies: 0, thrownA: 0, thrownB: 0, caughtA: 0, caughtB: 0, dryBalls: 0, dryKills: 0, updated: 0 });
 }
 function accumulateHuntLog(g, prog, s) {
   const sp = s.huntSpecies;
@@ -170,6 +170,10 @@ function accumulateHuntLog(g, prog, s) {
   const tA = (cur.ballA != null && prev.ballA != null) ? Math.max(prev.ballA - cur.ballA, 0) : 0;
   const tB = (cur.ballB != null && prev.ballB != null) ? Math.max(prev.ballB - cur.ballB, 0) : 0;
   e.thrownA += tA; e.thrownB += tB;
+  // seca de shiny: acumula e zera quando cai um (campos podem não existir em histórico antigo)
+  e.dryBalls = (e.dryBalls || 0) + tA + tB;
+  e.dryKills = (e.dryKills || 0) + dKills;
+  if (dShiny) { e.dryBalls = 0; e.dryKills = 0; }
   // Atribui as capturas ao grupo que gastou bola. Se a captura caiu numa janela sem leitura de
   // bag, fica pendente e entra na próxima que tiver — assim nenhuma captura se perde.
   if (dCaught) e.pend = (e.pend || 0) + dCaught;

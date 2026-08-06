@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.5.2",
+    "date": "2026-08-06",
+    "changes": [
+      "No historico por especie, a linha 'Shiny (por bola)' era sempre igual a 'Shiny (por encontro)' (o jogo usa 1 bola por encontro). No lugar dela entrou 'Sem shiny ha': quantas bolas voce ja jogou desde o ultimo shiny daquela especie, que zera sozinho quando cai um"
+    ]
+  },
+  {
     "version": "1.5.1",
     "date": "2026-08-06",
     "changes": [
