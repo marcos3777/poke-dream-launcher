@@ -36,6 +36,7 @@
   <div class="h"><span class="t">⚙ Configuracoes</span><button class="x" id="x" title="Fechar">✕</button></div>
   <div class="row">Versao instalada: <b id="ver">—</b></div>
   <button class="btn" id="sound-btn">🔊 Som</button>
+  <button class="btn" id="items-btn">🎒 Itens na barra</button>
   <button class="btn" id="changelog-btn">📋 Novidades (o que mudou)</button>
   <button class="btn" id="check">🔄 Verificar atualizacao</button>
   <button class="btn on" id="install" style="display:none">↻ Reiniciar e instalar</button>
@@ -64,6 +65,19 @@
       <button class="btn" id="snd-pick">📂 Escolher áudio do PC…</button>
       <button class="btn" id="snd-reset">↺ Restaurar som padrão</button>
       <div class="status">Aceita mp3, wav, ogg ou m4a. O som toca quando qualquer uma das suas telas captura um shiny.</div>
+    </div>
+  </div>
+
+  <div class="cl-panel" id="items">
+    <div class="h"><button class="x" id="itm-back" title="Voltar" style="margin-left:0;margin-right:8px">←</button><span class="t">🎒 Itens na barra</span></div>
+    <div class="cl-body">
+      <div class="row" style="margin-bottom:10px">Escolha o que aparece abaixo de cada tela na barra lateral.</div>
+      <label class="chk"><input type="checkbox" data-item="poke_ball"> Poke Ball</label>
+      <label class="chk"><input type="checkbox" data-item="ultra_ball"> Ultra Ball</label>
+      <label class="chk"><input type="checkbox" data-item="premier_ball"> Premier Ball</label>
+      <label class="chk"><input type="checkbox" data-item="potion"> Potion</label>
+      <label class="chk"><input type="checkbox" data-item="revive"> Revive</label>
+      <div class="status">Desmarque tudo para esconder os itens por completo.</div>
     </div>
   </div>
 <script>
@@ -121,6 +135,16 @@
   document.getElementById('snd-test').onclick = function(){ if (P && P.testSound) P.testSound(); };
   document.getElementById('snd-pick').onclick = function(){ if (P && P.pickSoundFile) P.pickSoundFile().then(function(r){ if (r) sndName.textContent = r.name; }); };
   document.getElementById('snd-reset').onclick = function(){ if (P && P.resetSound) P.resetSound().then(function(r){ if (r) sndName.textContent = r.name; }); };
+
+  // ---- itens na barra (mostrar/esconder cada um) ----
+  const items = document.getElementById('items');
+  const itemChks = document.querySelectorAll('#items input[data-item]');
+  document.getElementById('items-btn').onclick = function(){
+    items.classList.add('show');
+    if (P && P.getItemVis) P.getItemVis().then(function(v){ v = v || {}; itemChks.forEach(function(c){ c.checked = v[c.dataset.item] !== false; }); });
+  };
+  document.getElementById('itm-back').onclick = function(){ items.classList.remove('show'); };
+  itemChks.forEach(function(c){ c.onchange = function(){ if (P && P.setItemVis) P.setItemVis(c.dataset.item, c.checked); }; });
 
   // ---- novidades (changelog) ----
   function esc(s){ return String(s==null?'':s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }

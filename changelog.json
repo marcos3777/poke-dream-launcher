@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.4.0",
+    "date": "2026-08-06",
+    "changes": [
+      "Nova Pokedex (botao 📘): grade com todos os pokemon de Kanto e Johto — os que voce ja tem ficam em destaque e os que faltam aparecem apagados; tem filtro por regiao (Kanto/Johto), modo shiny e opcao 'so faltando', com contador de progresso",
+      "A barra da esquerda agora mostra os itens de cada conta embaixo do card: Poke Ball, Ultra Ball, Premier Ball, Potion e Revive, cada um com seu icone e quantidade",
+      "Novo menu 'Itens na barra' (no ⚙): escolha quais itens aparecem, ou esconda os que nao quiser ver"
+    ]
+  },
+  {
     "version": "1.3.5",
     "date": "2026-08-01",
     "changes": [

@@ -101,6 +101,30 @@
   .box-tip .tr{ color:var(--mut); line-height:1.5; }
   .box-tip .tr b{ color:var(--txt); font-weight:700; }
   .box-shiny{ color:var(--gold); font-weight:700; }
+
+  /* ---- Pokédex (grade de todos os pokes: capturados em destaque, faltando esmaecidos) ---- */
+  .dex-region{ display:flex; gap:6px; align-items:center; }
+  .dex-region .lbl{ color:var(--mut); font-size:10px; text-transform:uppercase; letter-spacing:.5px; margin-right:2px; }
+  .dex-grid{ display:flex; flex-wrap:wrap; gap:8px; align-content:flex-start; padding:4px 2px 12px; }
+  .dex-cell{ width:var(--cell,84px); height:var(--cell,84px); border-radius:11px; background:#10141d; border:1px solid var(--line2); display:flex; flex-direction:column; align-items:center; position:relative; padding:4px 3px; overflow:hidden; transition:filter .12s, opacity .12s; }
+  .dex-cell img{ width:calc(var(--cell,84px) - 40px); height:calc(var(--cell,84px) - 40px); image-rendering:pixelated; pointer-events:none; margin:auto 0; }
+  .dex-cell:hover{ filter:brightness(1.25); border-color:#3a4762; }
+  .dex-cell.has{ border-color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset; background:#181c10; }
+  .dex-cell:not(.has){ opacity:.34; }
+  .dex-cell:not(.has) img{ filter:grayscale(1) brightness(.5); }
+  .dex-cell:not(.has) .box-name{ color:var(--mut); }
+  .dex-cell:not(.has):hover{ opacity:.85; }
+
+  /* ---- Itens (Suprimentos) logo abaixo de cada card: mini-cards com número + ícone + label ---- */
+  .acc-wrap{ display:flex; flex-direction:column; gap:5px; }
+  .acc-items{ display:grid; grid-template-columns:repeat(3,1fr); gap:4px; padding:0 1px; }
+  .itc{ background:var(--panel2); border:1px solid var(--line2); border-radius:8px; padding:4px 3px; display:flex; flex-direction:column; align-items:center; gap:1px; min-width:0; }
+  .itc .top{ display:flex; align-items:center; gap:3px; }
+  .itc img{ width:17px; height:17px; image-rendering:pixelated; flex:0 0 auto; }
+  .itc .v{ font-size:11.5px; font-weight:800; color:var(--txt); font-variant-numeric:tabular-nums; line-height:1; }
+  .itc .l{ font-size:8px; letter-spacing:.3px; text-transform:uppercase; color:var(--mut); font-weight:700; }
+  .itc.z{ opacity:.5; }
+  .itc.z .v{ color:var(--mut); }
 </style>
 </head>
 <body>
@@ -111,6 +135,7 @@
     <span class="sp"></span>
     <button class="tbtn" id="btn-grid" style="display:none">▦ Grade</button>
     <button class="tbtn" id="btn-box">📦 Box</button>
+    <button class="tbtn" id="btn-dex">📘 Pokédex</button>
     <button class="tbtn" id="btn-add">+ Adicionar tela</button>
     <button class="ico" id="btn-cfg" title="Configuracoes / Atualizacao">⚙</button>
     <button class="ico" id="btn-min">—</button>
@@ -268,8 +293,128 @@
   function toggleBox(open){
     boxOpen = (open == null) ? !boxOpen : !!open;
     document.getElementById('btn-box').classList.toggle('on', boxOpen);
+    if (boxOpen && dexOpen) { dexOpen = false; document.getElementById('btn-dex').classList.remove('on'); }  // box e pokédex dividem o #main
     if (P && P.setBoxOpen) P.setBoxOpen(boxOpen);
     if (boxOpen) loadBox(); else { hideTip(); renderSidebar(); }
+  }
+
+  // ---- Pokédex: grade de TODOS os pokes do jogo; capturados em destaque, faltando esmaecidos ----
+  // "todos" = as espécies do DEX_MAP (o roster de Kanto+Johto do PokeDream); "capturado" = está na box.
+  const DEX_LIST = Object.keys(DEX_MAP).map(function(n){ return { species: n, dex: DEX_MAP[n] }; }).sort(function(a,b){ return a.dex - b.dex; });
+  let dexOpen = false, dexRegion = 'all', dexMissing = false, dexShiny = false;
+
+  function dexCounts(){
+    const cnt = {}, shiny = {};
+    for (const r of boxRows){ cnt[r.species] = (cnt[r.species] || 0) + 1; if (r.shiny) shiny[r.species] = (shiny[r.species] || 0) + 1; }
+    return { cnt, shiny };
+  }
+  function inDexRegion(d){ return dexRegion === 'kanto' ? d <= 151 : dexRegion === 'johto' ? d >= 152 : true; }
+
+  function showDexTip(e, cntN, shN){
+    const t = ensureTip();
+    const has = dexShiny ? shN > 0 : cntN > 0;
+    t.innerHTML = '<div class="tn">' + esc(e.species) + '</div>'
+      + '<div class="tr">Dex <b>#' + String(e.dex).padStart(3, '0') + '</b></div>'
+      + (has
+          ? '<div class="tr">Você tem <b>' + cntN + '</b>' + (shN ? ' · <b>' + shN + '</b> shiny ✨' : '') + '</div>'
+          : '<div class="tr" style="color:var(--mut)">' + (dexShiny ? 'Shiny ainda não capturado' : 'Ainda não capturado') + '</div>');
+    t.style.display = 'block';
+  }
+
+  function renderDexGrid(){
+    const grid = document.getElementById('dex-grid'); if (!grid) return;
+    grid.style.setProperty('--cell', boxZoom + 'px');
+    const { cnt, shiny } = dexCounts();
+    const own = dexShiny ? shiny : cnt;   // no modo shiny, "capturado" = tem o shiny da espécie
+    const list = DEX_LIST.filter(function(e){ return inDexRegion(e.dex); });
+    const vis = list.filter(function(e){ return !dexMissing || !own[e.species]; });
+    grid.innerHTML = vis.map(function(e){
+      const has = !!own[e.species];
+      const s = sprStatic(e.species, dexShiny);   // sprite na cor certa (shiny ou normal)
+      const num = '#' + String(e.dex).padStart(3, '0');
+      return '<div class="dex-cell'+(has?' has':'')+'" data-sp="'+esc(e.species)+'">'
+        + '<span class="box-num">' + num + '</span>'
+        + (s ? '<img src="'+s+'" loading="lazy" onerror="this.style.visibility=\'hidden\'">' : '')
+        + '<span class="box-name">' + esc(e.species) + '</span>'
+        + '</div>';
+    }).join('');
+    const got = list.filter(function(e){ return own[e.species]; }).length, total = list.length;
+    const pct = total ? Math.round(got / total * 100) : 0;
+    const c = document.getElementById('dex-count'); if (c) c.textContent = got + ' / ' + total + (dexShiny ? ' shiny' : '') + ' capturados (' + pct + '%)';
+
+    grid.querySelectorAll('.dex-cell').forEach(function(cell){
+      const sp = cell.dataset.sp, e = { species: sp, dex: DEX_MAP[sp] || 0 };
+      cell.addEventListener('mouseenter', function(){ showDexTip(e, cnt[sp] || 0, shiny[sp] || 0); });
+      cell.addEventListener('mousemove', moveTip);
+      cell.addEventListener('mouseleave', hideTip);
+    });
+  }
+  function setDexRegionActive(){ const wrap = document.querySelector('.dex-region'); if (!wrap) return; wrap.querySelectorAll('.sbtn').forEach(function(b){ b.classList.toggle('on', b.dataset.r === dexRegion); }); }
+  function renderDex(){
+    const main = document.getElementById('main');
+    main.innerHTML =
+      '<div class="box-wrap">'
+        + '<div class="box-top">'
+          + '<b>📘 Pokédex</b>'
+          + '<span class="box-count" id="dex-count"></span>'
+          + '<label class="mclose"><input type="checkbox" id="dex-shiny"'+(dexShiny?' checked':'')+'> shiny ✨</label>'
+          + '<label class="mclose"><input type="checkbox" id="dex-missing"'+(dexMissing?' checked':'')+'> só faltando</label>'
+          + '<button class="tbtn" id="dex-refresh" title="Atualizar da conta">🔄</button>'
+        + '</div>'
+        + '<div class="box-sort">'
+          + '<div class="dex-region"><span class="lbl">Região</span>'
+            + '<button class="sbtn" data-r="all">Todos</button>'
+            + '<button class="sbtn" data-r="kanto">Kanto</button>'
+            + '<button class="sbtn" data-r="johto">Johto</button>'
+          + '</div>'
+          + '<div class="box-zoom mclose"><span>🔍</span><input type="range" id="dex-zoom" min="56" max="128" step="4" value="'+boxZoom+'"></div>'
+        + '</div>'
+        + '<div class="box-scroll"><div class="dex-grid" id="dex-grid"></div></div>'
+      + '</div>';
+    document.getElementById('dex-shiny').onchange = function(){ dexShiny = this.checked; renderDexGrid(); };
+    document.getElementById('dex-missing').onchange = function(){ dexMissing = this.checked; renderDexGrid(); };
+    document.getElementById('dex-refresh').onclick = function(){ loadDex(); };
+    document.getElementById('dex-zoom').oninput = function(){ boxZoom = parseInt(this.value, 10) || 84; try { localStorage.setItem('boxZoom', boxZoom); } catch {} const g = document.getElementById('dex-grid'); if (g) g.style.setProperty('--cell', boxZoom + 'px'); };
+    main.querySelectorAll('.dex-region .sbtn').forEach(function(btn){ btn.onclick = function(){ dexRegion = btn.dataset.r; setDexRegionActive(); renderDexGrid(); }; });
+    setDexRegionActive();
+    renderDexGrid();
+  }
+  function loadDex(){
+    if (!P || !P.getBox) return;
+    hideTip();
+    document.getElementById('main').innerHTML = '<div class="empty">Carregando pokédex…</div>';
+    P.getBox().then(function(d){ boxData = d || []; boxRows = flattenBox(boxData); renderDex(); })
+      .catch(function(){ document.getElementById('main').innerHTML = '<div class="empty">Não consegui carregar a pokédex.</div>'; });
+  }
+  function toggleDex(open){
+    dexOpen = (open == null) ? !dexOpen : !!open;
+    document.getElementById('btn-dex').classList.toggle('on', dexOpen);
+    if (dexOpen && boxOpen) { boxOpen = false; document.getElementById('btn-box').classList.remove('on'); }
+    if (P && P.setBoxOpen) P.setBoxOpen(dexOpen);   // reusa o mesmo mecanismo da box (esconde as telas do jogo)
+    if (dexOpen) loadDex(); else { hideTip(); renderSidebar(); }
+  }
+
+  // ---- Suprimentos de cada conta, logo abaixo do card: mini-cards (linha 1 = balls, linha 2 = pot/revive) ----
+  // [chave, label, sprite do item na PokeAPI]. Vem no payload de 'accounts'.
+  const ITM_DEFS = [
+    ['poke_ball','Poke','poke-ball'], ['ultra_ball','Ultra','ultra-ball'], ['premier_ball','Prem','premier-ball'],
+    ['potion','Potion','potion'], ['revive','Revive','revive'],
+  ];
+  let itemVis = { poke_ball: true, ultra_ball: true, premier_ball: true, potion: true, revive: true };   // config (menu ⚙ > Itens)
+  function sprItem(name){ return 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/' + name + '.png'; }
+  function abbrN(n){ n = n || 0; if (n >= 1e6) return (n/1e6).toFixed(1).replace('.',',') + 'M'; if (n >= 1e3) return (n/1e3).toFixed(1).replace('.',',') + 'k'; return String(n); }
+  function itemsForAcc(inf){
+    const it = inf && inf.items; if (!it) return '';
+    const defs = ITM_DEFS.filter(function(c){ return itemVis[c[0]] !== false; });
+    if (!defs.length) return '';
+    const cards = defs.map(function(c){
+      const v = it[c[0]] || 0;
+      return '<div class="itc'+(v?'':' z')+'" title="'+c[1]+': '+v.toLocaleString('pt-BR')+'">'
+        + '<span class="top"><img src="'+sprItem(c[2])+'" alt="" loading="lazy" onerror="this.style.display=\'none\'"><span class="v">'+abbrN(v)+'</span></span>'
+        + '<span class="l">'+c[1]+'</span>'
+      + '</div>';
+    }).join('');
+    return '<div class="acc-items">' + cards + '</div>';
   }
 
   function renderSidebar() {
@@ -291,11 +436,12 @@
         + esc(p2.species)
         + (p2.xpPct != null ? ' <b>XP ' + p2.xpPct + '%</b>' : '') + '</span>' : '';
       const hunt = inf.hunt ? '<span class="acc-hunt">🗺 caçando ' + esc(titce(inf.hunt)) + '</span>' : '';
-      return '<button class="acc'+(isSel?' on':'')+'" draggable="true" data-slot="'+s+'">'
+      const card = '<button class="acc'+(isSel?' on':'')+'" draggable="true" data-slot="'+s+'">'
         + sprites
         + '<span class="acc-info"><span class="acc-name">'+esc(name)+'</span><span class="acc-sub'+(a&&a.shiny?' shiny':'')+'">'+sub+'</span>'+p2line+hunt+'</span>'
         + '<span class="acc-reload" data-reload="'+s+'" title="Recarregar">&#x21bb;</span>'
         + '</button>';
+      return '<div class="acc-wrap">' + card + itemsForAcc(inf) + '</div>';
     }).join('');
 
     const focusHTML = mode === 'single' && selected
@@ -312,7 +458,7 @@
     side.innerHTML = html;
 
     // fiação por addEventListener (sem onclick inline no HTML)
-    side.querySelectorAll('[data-slot]').forEach(b => b.addEventListener('click', () => { if (boxOpen) toggleBox(false); if (P) P.selectAccount(+b.dataset.slot); }));
+    side.querySelectorAll('[data-slot]').forEach(b => b.addEventListener('click', () => { if (boxOpen) toggleBox(false); if (dexOpen) toggleDex(false); if (P) P.selectAccount(+b.dataset.slot); }));
     side.querySelectorAll('[data-reload]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); if (P) P.reloadGame(+b.dataset.reload); }));
 
     // arrastar os cards pra reordenar as contas (reordena as telas do jogo junto)
@@ -347,8 +493,8 @@
       btnGrid.classList.remove('on');
     }
 
-    // enquanto a box está aberta ela ocupa o #main — não mexer
-    if (!boxOpen) {
+    // enquanto a box ou a pokédex estão abertas elas ocupam o #main — não mexer
+    if (!boxOpen && !dexOpen) {
       document.getElementById('main').innerHTML = accounts.length
         ? ''
         : '<div class="empty">Nenhuma tela aberta.<br>Clique em <b>+ Adicionar tela</b> para começar.</div>';
@@ -367,7 +513,8 @@
 
   document.getElementById('btn-add').onclick = function() { if (P) P.addView(); };
   document.getElementById('btn-box').onclick = function() { toggleBox(); };
-  document.getElementById('btn-grid').onclick = function() { if (boxOpen) toggleBox(false); if (P) P.setGameMode('grid'); };
+  document.getElementById('btn-dex').onclick = function() { toggleDex(); };
+  document.getElementById('btn-grid').onclick = function() { if (boxOpen) toggleBox(false); if (dexOpen) toggleDex(false); if (P) P.setGameMode('grid'); };
   document.getElementById('btn-min').onclick = function() { if (P) P.winMinimize(); };
   document.getElementById('btn-max').onclick = function() { if (P) P.winMaximize(); };
   document.getElementById('btn-close').onclick = function() { if (P) P.winClose(); };
@@ -401,6 +548,7 @@
     if (typeof cfg.volume === 'number') sndVolume = cfg.volume;
     if (cfg.dataUrl) { sndAudio = new Audio(cfg.dataUrl); }   // pré-carrega o áudio atual
   });
+  if (P && P.onItemConfig) P.onItemConfig(function(v){ if (v) { itemVis = v; renderSidebar(); } });   // menu ⚙ > Itens: mostrar/esconder cada item
   if (P && P.onShinyCaught) P.onShinyCaught(function(){ if (sndEnabled) playSound(null, sndVolume); });
   if (P && P.onPlaySound) P.onPlaySound(function(p){ playSound(p && p.dataUrl, p && p.volume); });   // botão testar (ignora o enabled)
 </script>

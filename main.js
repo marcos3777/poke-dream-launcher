@@ -34,6 +34,7 @@ let SETTINGS_FILE = null;  // preferências (som)
 let soundEnabled = true;   // tocar som ao capturar shiny
 let soundVolume = 0.8;     // 0..1
 let soundPath = null;      // caminho de um áudio do PC do usuário; null = som padrão embutido
+let itemVis = { poke_ball: true, ultra_ball: true, premier_ball: true, potion: true, revive: true };  // quais itens aparecem na barra
 let diagLines = 0;
 
 // ---- diagnóstico: captura de rede (só grava quando diagOn) ----
@@ -41,6 +42,8 @@ function diagWrite(obj) {
   if (!DUMP_FILE || diagLines > 40000) return;   // teto pra não virar GB
   try { fs.appendFileSync(DUMP_FILE, JSON.stringify(obj) + '\n'); diagLines++; } catch {}
 }
+// as 4 telas mandam praticamente a mesma coisa -> grava só a PRIMEIRA tela (1º card da lista) pra não poluir o dump
+function isDumpSlot(slot) { return games.length > 0 && games[0].slot === slot; }
 function dumpWs(slot, dir, payload, isBinary) {
   if (isBinary) {   // frame binário (opcode 2) — payload vem base64; guarda cru pra decodificar na análise
     let raw = payload; if (raw && raw.length > 200000) raw = raw.slice(0, 200000);
@@ -113,6 +116,8 @@ function applyState(g, state) {   // estado COMPLETO (/offline ou /save cheio): 
   let changed = false;
   if (state.huntId != null && state.huntId !== g.hunt) { g.hunt = state.huntId; changed = true; }
   if (Array.isArray(prog.box)) rebuildBox(g, prog.box);
+  if (prog.bag && typeof prog.bag === 'object') g._bag = prog.bag;   // mochila (item -> qtd); vem cheia
+  if (prog.money != null) g._money = prog.money;
   if (Array.isArray(prog.party)) g._party = prog.party.slice();
   if (prog.activeUid != null) g._activeUid = prog.activeUid;
   if (refreshActive(g)) changed = true;
@@ -124,6 +129,8 @@ function applyPatch(g, patch) {   // delta descomprimido: campos que MUDARAM (ac
   const prog = patch.progress || {};
   if (Array.isArray(prog.box)) rebuildBox(g, prog.box);   // captura online reenvia o box inteiro aqui
   else if (patch.boxDelta && g._box) for (const uid in patch.boxDelta) { const d = patch.boxDelta[uid], e = g._box[uid]; if (e && d) { if (d.level != null) e.level = d.level; if (d.xp != null) e.xp = d.xp; } }
+  if (prog.bag && typeof prog.bag === 'object') g._bag = prog.bag;   // o /save reenvia a bag inteira quando ela muda
+  if (prog.money != null) g._money = prog.money;
   if (Array.isArray(prog.party)) g._party = prog.party.slice();
   if (prog.activeUid != null) g._activeUid = prog.activeUid;
   if (refreshActive(g)) changed = true;
@@ -168,13 +175,13 @@ function attachCapture(g) {
         // POST /save (e /actions) carregam o estado ATUAL no corpo -> alimenta a sidebar ao vivo + dump
         const req = params.request, url = req && req.url;
         if (!url || !isStateReqUrl(url)) return;
-        const handle = (pd) => { if (pd == null) return; if (diagOn) dumpHttpReq(g.slot, url, pd); feedState(g, url, pd); };
+        const handle = (pd) => { if (pd == null) return; if (diagOn && isDumpSlot(g.slot)) dumpHttpReq(g.slot, url, pd); feedState(g, url, pd); };
         if (req.postData != null) handle(req.postData);
         else if (req.hasPostData) wc.debugger.sendCommand('Network.getRequestPostData', { requestId: params.requestId }).then((r) => handle(r && r.postData)).catch(() => {});
       } else if (method === 'Network.webSocketCreated') {
-        if (diagOn) diagWrite({ slot: g.slot, ts: Date.now(), kind: 'ws-open', url: String(params.url || '').split('?')[0] });
+        if (diagOn && isDumpSlot(g.slot)) diagWrite({ slot: g.slot, ts: Date.now(), kind: 'ws-open', url: String(params.url || '').split('?')[0] });
       } else if (method === 'Network.webSocketFrameReceived' || method === 'Network.webSocketFrameSent') {
-        if (!diagOn) return;
+        if (!diagOn || !isDumpSlot(g.slot)) return;
         const r = params.response, dir = method === 'Network.webSocketFrameSent' ? 'sent' : 'recv';
         if (r && r.payloadData != null && (r.opcode === 1 || r.opcode === 2)) dumpWs(g.slot, dir, r.payloadData, r.opcode === 2);
       } else if (method === 'Network.responseReceived') {
@@ -182,7 +189,7 @@ function attachCapture(g) {
         if (url && (t === 'XHR' || t === 'Fetch')) reqs.set(params.requestId, url);
       } else if (method === 'Network.loadingFinished') {
         const url = reqs.get(params.requestId); if (url == null) return; reqs.delete(params.requestId);
-        const info = isInfoUrl(url), dump = diagOn;
+        const info = isInfoUrl(url), dump = diagOn && isDumpSlot(g.slot);
         if (!info && !dump) return;
         wc.debugger.sendCommand('Network.getResponseBody', { requestId: params.requestId }).then((res) => {
           if (!res || res.body == null) return;
@@ -438,9 +445,22 @@ function removeGame(slot) {
   return activeSlots();
 }
 
+// resumo de itens da conta pra sidebar: 3 balls + potion/revive agregados (+ money)
+function sumBag(bag, re) { if (!bag) return 0; let s = 0; for (const k in bag) if (re.test(k)) s += (bag[k] || 0); return s; }
+function itemSummary(g) {
+  const bag = g._bag || {};
+  return {
+    money: g._money || 0,
+    poke_ball: bag.poke_ball || 0,
+    ultra_ball: bag.ultra_ball || 0,
+    premier_ball: bag.premier_ball || 0,
+    potion: sumBag(bag, /potion/i),   // agrega qualquer *_potion
+    revive: sumBag(bag, /revive/i),   // agrega revive + max_revive etc.
+  };
+}
 function buildAccountsPayload() {
   const info = {};
-  for (const g of games) info[g.slot] = { name: g.charName || null, hunt: g.hunt || null, active: g.active || null, party2: g.party2 || null };
+  for (const g of games) info[g.slot] = { name: g.charName || null, hunt: g.hunt || null, active: g.active || null, party2: g.party2 || null, items: itemSummary(g) };
   return { slots: activeSlots(), selected: selectedSlot, mode: gameMode, info };
 }
 
@@ -462,9 +482,11 @@ function loadSettings() {
     soundEnabled = j.soundEnabled !== false;
     if (typeof j.soundVolume === 'number') soundVolume = Math.max(0, Math.min(1, j.soundVolume));
     soundPath = (typeof j.soundPath === 'string' && j.soundPath) ? j.soundPath : null;
+    if (j.itemVis && typeof j.itemVis === 'object') for (const k in itemVis) itemVis[k] = j.itemVis[k] !== false;
   } catch { soundEnabled = true; soundVolume = 0.8; soundPath = null; }
 }
-function saveSettings() { try { if (SETTINGS_FILE) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ soundEnabled, soundVolume, soundPath })); } catch {} }
+function saveSettings() { try { if (SETTINGS_FILE) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ soundEnabled, soundVolume, soundPath, itemVis })); } catch {} }
+function pushItemVis() { if (dashView) send(dashView, 'item-config', itemVis); }
 
 // ---- som (shiny capturado) ----
 const DEFAULT_SOUND = path.join(__dirname, 'sounds', 'shiny-default.mp3');
@@ -601,6 +623,10 @@ ipcMain.handle('pickSoundFile', async () => {
   return { name: soundName(), custom: !!soundPath };
 });
 ipcMain.handle('resetSound', () => { soundPath = null; saveSettings(); pushSoundConfig(); return { name: soundName(), custom: false }; });
+
+// ---- visibilidade dos itens na barra ----
+ipcMain.handle('getItemVis', () => itemVis);
+ipcMain.handle('setItemVis', (_e, key, on) => { if (key in itemVis) { itemVis[key] = !!on; saveSettings(); pushItemVis(); } return itemVis; });
 ipcMain.handle('testSound', () => { if (dashView) send(dashView, 'play-sound', { dataUrl: soundDataUrl(), volume: soundVolume }); });
 
 // ---- auto-update (via GitHub Releases) ----
@@ -666,7 +692,7 @@ function setupAutoUpdate() {
 app.whenReady().then(() => {
   createWindow();
   // espera a UI carregar antes de checar (pra não perder os eventos de status)
-  dashView.webContents.once('did-finish-load', () => { setTimeout(setupAutoUpdate, 1500); pushSoundConfig(); });
+  dashView.webContents.once('did-finish-load', () => { setTimeout(setupAutoUpdate, 1500); pushSoundConfig(); pushItemVis(); });
   app.on('activate', () => { if (BaseWindow.getAllWindows().length === 0) createWindow(); });
 });
 
