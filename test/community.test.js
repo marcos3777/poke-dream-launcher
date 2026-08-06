@@ -1,18 +1,40 @@
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   SUPABASE_PUBLISHABLE_KEY,
+  COMMUNITY_PREFERENCE_VERSION,
   CommunityHttpError,
   CommunitySnapshotError,
   huntLogToStats,
   buildSubmitPayload,
   createCommunityClient,
+  resolveShareStatsSetting,
 } = require('../community');
 
 const CLIENT_ID = '3f2a91c4-7b8e-4d1a-9f60-2c5e8a4b1d33';
 const CLIENT_TOKEN = 'A'.repeat(43);
+
+test('compartilhamento começa ligado e respeita desligamento após a migração', () => {
+  assert.equal(resolveShareStatsSetting({}), true);
+  assert.equal(resolveShareStatsSetting({ shareStats: false }), true);
+  assert.equal(resolveShareStatsSetting({ communityPreferenceVersion: COMMUNITY_PREFERENCE_VERSION, shareStats: true }), true);
+  assert.equal(resolveShareStatsSetting({ communityPreferenceVersion: COMMUNITY_PREFERENCE_VERSION, shareStats: false }), false);
+});
+
+test('envio manual existe somente no modo de desenvolvimento', () => {
+  const root = path.join(__dirname, '..');
+  const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+  const preload = fs.readFileSync(path.join(root, 'preload.js'), 'utf8');
+  const config = fs.readFileSync(path.join(root, 'config.html'), 'utf8');
+  assert.match(main, /ipcMain\.handle\('forceCommunitySync',[\s\S]*?if \(app\.isPackaged\) throw/);
+  assert.match(preload, /forceCommunitySync: \(\) => ipcRenderer\.invoke\('forceCommunitySync'\)/);
+  assert.match(config, /id="share-force" style="display:none"/);
+  assert.match(config, /P\.isDev\(\)[\s\S]*?share-force/);
+});
 
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -40,6 +62,24 @@ function aggregate(species = 'MrMime') {
   };
 }
 
+function weightedAggregate(species = 'MrMime') {
+  return {
+    ...aggregate(species),
+    kills: '10000.0',
+    caught: '17.25',
+    shinies: '0.1',
+    thrown_a: '51.5',
+    thrown_b: '9948.5',
+    caught_a: '1.25',
+    caught_b: '16.0',
+    ms: '3600000.5',
+    catch_pct: '0.1725',
+    catch_pct_a: '2.4272',
+    catch_pct_b: '0.1608',
+    kills_per_shiny: '100000',
+  };
+}
+
 test('huntLogToStats separa shinies encontrados de capturas e envia somente dados comunitários', () => {
   const stats = huntLogToStats({
     MrMime: {
@@ -53,6 +93,8 @@ test('huntLogToStats separa shinies encontrados de capturas e envia somente dado
       ms: 12345,
       dryBalls: 99,
       dryKills: 42,
+      shinyCaught: 2,
+      bestiary: { kills: 46000, caught: 0 },
       pend: 1,
       updated: 123,
       streaks: [{ name: 'Conta pessoal', balls: 4 }],
@@ -74,6 +116,8 @@ test('huntLogToStats separa shinies encontrados de capturas e envia somente dado
   });
   assert.equal(JSON.stringify(stats).includes('Conta pessoal'), false);
   assert.equal(JSON.stringify(stats).includes('dryBalls'), false);
+  assert.equal(JSON.stringify(stats).includes('shinyCaught'), false);
+  assert.equal(JSON.stringify(stats).includes('bestiary'), false);
 });
 
 test('huntLogToStats rejeita o snapshot inteiro em vez de apagar uma espécie silenciosamente', () => {
@@ -150,7 +194,7 @@ test('getSpeciesStats interpreta envelope, números e cache positivo', async () 
   const client = createCommunityClient({
     fetchImpl: async (url, init) => {
       calls++;
-      assert.equal(url.endsWith('/functions/v1/species-stats?species=MrMime'), true);
+      assert.equal(url.endsWith('/functions/v1/species-stats?species=MrMime&format=precise'), true);
       assert.equal(init.headers.apikey, SUPABASE_PUBLISHABLE_KEY);
       return jsonResponse({ data: aggregate() });
     },
@@ -161,6 +205,17 @@ test('getSpeciesStats interpreta envelope, números e cache positivo', async () 
   assert.deepEqual(first, second);
   assert.equal(first.contributors, 2);
   assert.equal(first.caught_a, 30.25);
+});
+
+test('getSpeciesStats preserva contagens ponderadas fracionárias do servidor', async () => {
+  const client = createCommunityClient({
+    fetchImpl: async () => jsonResponse({ data: weightedAggregate() }),
+  });
+  const stats = await client.getSpeciesStats('MrMime');
+  assert.equal(stats.shinies, 0.1);
+  assert.equal(stats.caught, 17.25);
+  assert.equal(stats.thrown_a, 51.5);
+  assert.equal(stats.ms, 3600000.5);
 });
 
 test('cache negativo expira antes do positivo', async () => {
@@ -193,6 +248,28 @@ test('leituras simultâneas da mesma espécie compartilham uma requisição', as
   resolveFetch(jsonResponse({ data: aggregate() }));
   assert.equal((await first).kills, 800);
   assert.equal(calls, 1);
+});
+
+test('consulta iniciada antes da limpeza não recoloca resposta antiga no cache', async () => {
+  let resolveFirst;
+  let calls = 0;
+  const client = createCommunityClient({
+    fetchImpl: () => {
+      calls++;
+      if (calls === 1) return new Promise((resolve) => { resolveFirst = resolve; });
+      return Promise.resolve(jsonResponse({ data: aggregate('MrMime') }));
+    },
+  });
+
+  const stale = client.getSpeciesStats('MrMime');
+  client.clearCache();
+  const fresh = client.getSpeciesStats('MrMime');
+  assert.equal(calls, 2);
+  resolveFirst(jsonResponse({ data: aggregate('MrMime') }));
+  await stale;
+  await fresh;
+  await client.getSpeciesStats('MrMime');
+  assert.equal(calls, 2);
 });
 
 test('timeout aborta a chamada sem vazar o erro de rede', async () => {

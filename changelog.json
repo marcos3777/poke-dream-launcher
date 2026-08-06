@@ -1,5 +1,23 @@
 [
   {
+    "version": "1.6.0",
+    "date": "2026-08-06",
+    "changes": [
+      "O + agora abre um hub com o histórico registrado pelo launcher enquanto ele está aberto; Bestiary, Dex e totais anteriores do jogo não entram",
+      "O histórico por espécie começa em uma base limpa e confiável; a versão anterior permanece recuperável em um backup local separado",
+      "Frequências de captura e shiny aparecem em porcentagem e no formato 1 em N, com ritmo por hora somente após uma amostra mínima",
+      "Shinies capturados passam a ser contados pelo próprio launcher apenas quando um novo shiny na Box coincide com uma nova captura registrada",
+      "A tela Stats agora mostra somente os deltas desta sessão e não usa mais os contadores de Pokédex/Shiny do jogo",
+      "O estado inicial comprimido agora é lido corretamente; pacotes atrasados são ordenados, repetidos são ignorados e uma lacuna reinicia a referência sem estimar dados",
+      "Hunts com várias espécies não recebem divisão inventada, e o mesmo personagem aberto em duas telas não duplica o histórico nem a tela Stats",
+      "A amostra comunitária é atualizada aproximadamente a cada cinco minutos durante a hunt e continua recebendo apenas os contadores do launcher",
+      "O compartilhamento comunitário agora vem ligado por padrão; se for desligado nas configurações, a escolha continua respeitada",
+      "No modo de desenvolvimento, a tela de compartilhamento ganhou um botão para enviar a hunt imediatamente e mostra o horário da próxima atualização",
+      "Os textos do hub foram simplificados para deixar a leitura mais natural e direta",
+      "O arquivo de diagnóstico passa a ocultar tokens, e-mail e identificadores de personagem nas novas capturas"
+    ]
+  },
+  {
     "version": "1.5.2",
     "date": "2026-08-06",
     "changes": [

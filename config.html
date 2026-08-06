@@ -81,21 +81,14 @@
   <div class="cl-panel" id="share">
     <div class="h"><button class="x" id="share-back" title="Voltar" style="margin-left:0;margin-right:8px">←</button><span class="t">📡 Compartilhar estatisticas</span></div>
     <div class="cl-body">
-      <div class="row" style="margin-bottom:10px">Junta os seus números de caçada com contribuições anônimas da comunidade, para consultar a taxa de captura até de uma espécie que você ainda não caçou.</div>
-      <label class="chk"><input type="checkbox" id="share-on"> Enviar minhas estatisticas de cacada</label>
-      <div class="status">Quando ativado, o launcher envia os números acumulados a cada 15 minutos. Se estiver offline, tenta novamente depois.</div>
-      <div class="status">Contribuições de instalações novas passam por um período de validação antes de entrar na amostra.</div>
-      <div class="share-state" id="share-state" aria-live="polite">Carregando estado do compartilhamento…</div>
-      <div class="status" style="margin-bottom:10px">Desativar interrompe os próximos envios, mas não apaga contribuições que já entraram no agregado comunitário.</div>
-      <div class="status" style="margin-bottom:10px">Ao consultar uma amostra, o servidor recebe a espécie consultada e dados normais da conexão, como o IP, mesmo que o envio esteja desligado.</div>
-      <div class="status" style="margin-bottom:10px">No cadastro de uma contribuição, o IP vira um hash diário para limitar abuso; o banco não guarda o endereço bruto.</div>
+      <div class="row" style="margin-bottom:10px">Junta seu historico de cacada com o de outros jogadores, pra voce consultar a taxa de captura de uma especie que ainda nem cacou.</div>
+      <label class="chk"><input type="checkbox" id="share-on"> Compartilhar minhas estatisticas de cacada</label>
+      <div class="share-state" id="share-state" aria-live="polite">Carregando…</div>
+      <button class="btn" id="share-force" style="display:none">🧪 Enviar agora (dev)</button>
       <div class="sep"></div>
-      <div class="row" style="margin-bottom:4px"><b>O que e enviado</b></div>
-      <div class="status" style="margin-bottom:10px">Por especie: encontros/derrotas, capturas, shinies encontrados/derrotados, bolas jogadas e tempo de cacada.</div>
-      <div class="row" style="margin-bottom:4px"><b>O que nunca e enviado</b></div>
-      <div class="status" style="margin-bottom:10px">Login, senha, nome dos personagens, nome das contas, seus pokemon e seus itens. Nenhum dado das suas contas ou personagens e enviado.</div>
+      <div class="status" style="margin-bottom:8px"><b>Envia</b> por especie: encontros, capturas, shinies, bolas jogadas e tempo de cacada.</div>
+      <div class="status" style="margin-bottom:10px"><b>Nunca envia</b>: login, senha, nome das contas ou personagens, seus pokemon e seus itens.</div>
       <div class="row">Seu ID anonimo: <b id="share-id" style="font-size:10px">—</b></div>
-      <div class="status">Um numero aleatorio criado no seu PC, sem ligacao com suas contas. Serve so pra nao contar os mesmos numeros duas vezes.</div>
     </div>
   </div>
 
@@ -140,6 +133,7 @@
   if (P && P.isDev) P.isDev().then(function(dev){
     if (!dev) return;
     const sec = document.getElementById('dev-section'); if (sec) sec.style.display = '';
+    const force = document.getElementById('share-force'); if (force) force.style.display = '';
     const diag = document.getElementById('diag');
     const diagStatus = document.getElementById('diag-status');
     if (P.getDiag) P.getDiag().then(function(on){ diag.checked = !!on; });
@@ -175,10 +169,11 @@
   document.getElementById('snd-pick').onclick = function(){ if (P && P.pickSoundFile) P.pickSoundFile().then(function(r){ if (r) sndName.textContent = r.name; }); };
   document.getElementById('snd-reset').onclick = function(){ if (P && P.resetSound) P.resetSound().then(function(r){ if (r) sndName.textContent = r.name; }); };
 
-  // ---- compartilhar estatisticas (opt-in) ----
+  // ---- compartilhar estatisticas ----
   const share = document.getElementById('share');
   const shareOn = document.getElementById('share-on');
   const shareState = document.getElementById('share-state');
+  const shareForce = document.getElementById('share-force');
   const shareId = document.getElementById('share-id');
   let shareSnapshot = null;
   function setShareState(text, kind){
@@ -205,17 +200,19 @@
     shareSnapshot = s;
     const available = s.available !== false;
     const lastSuccess = shareTime(s.lastSuccessAt);
+    const nextSync = shareTime(s.nextSyncAt);
     shareOn.checked = !!s.enabled;
     shareOn.disabled = !available;
+    shareForce.disabled = !available || !s.enabled;
     shareId.textContent = s.clientId || '—';
     if (!available) {
       setShareState('Compartilhamento indisponível no momento. Seus dados continuam somente neste computador.', 'off');
     } else if (s.lastError) {
       setShareState(String(s.lastError) + (lastSuccess ? ' Último envio bem-sucedido: ' + lastSuccess + '.' : ' O launcher tentará novamente automaticamente.'), 'warn');
     } else if (lastSuccess) {
-      setShareState('Último envio concluído em ' + lastSuccess + '.', 'ok');
+      setShareState('Último envio: ' + lastSuccess + '.' + (nextSync ? ' Próxima atualização: ' + nextSync + '.' : ''), 'ok');
     } else if (s.enabled) {
-      setShareState('Compartilhamento ativado. Aguardando o primeiro envio.', 'off');
+      setShareState('Compartilhamento ativado.' + (nextSync ? ' Primeiro envio programado para ' + nextSync + '.' : ' Preparando o primeiro envio.'), 'off');
     } else {
       setShareState('Compartilhamento desativado. Nenhum novo dado será enviado.', 'off');
     }
@@ -249,6 +246,21 @@
       shareOn.checked = previous;
       shareOn.disabled = !shareSnapshot || shareSnapshot.available === false;
       setShareState('Não foi possível salvar sua preferência agora. Tente novamente.', 'warn');
+    });
+  };
+  shareForce.onclick = function(){
+    if (!P || !P.forceCommunitySync || shareForce.disabled) return;
+    shareForce.disabled = true;
+    setShareState('Enviando agora…', 'off');
+    P.forceCommunitySync().then(function(result){
+      const status = result && result.status ? result.status : result;
+      renderShareState(status);
+      const saved = result && Number.isFinite(Number(result.saved)) ? Number(result.saved) : 0;
+      setShareState('Envio manual concluído: ' + saved + (saved === 1 ? ' espécie enviada.' : ' espécies enviadas.'), 'ok');
+    }).catch(function(error){
+      refreshShareState().then(function(){
+        if (!shareSnapshot || !shareSnapshot.lastError) setShareState(error && error.message ? error.message : 'Não foi possível enviar agora.', 'warn');
+      });
     });
   };
 

@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('poke', {
   getHuntLog: (species) => ipcRenderer.invoke('getHuntLog', species),
   getShareStats: () => ipcRenderer.invoke('getShareStats'),
   setShareStats: (on) => ipcRenderer.invoke('setShareStats', on),
+  forceCommunitySync: () => ipcRenderer.invoke('forceCommunitySync'),
   getDiag: () => ipcRenderer.invoke('getDiag'),
   setDiag: (on) => ipcRenderer.invoke('setDiag', on),
   isDev: () => ipcRenderer.invoke('isDev'),

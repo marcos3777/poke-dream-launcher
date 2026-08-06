@@ -3,6 +3,7 @@
 const SUPABASE_URL = 'https://ddjhptkpndopbondgvlv.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_yTCUuFkmqnOSf3OmHYJZXA_FMnaPmpB';
 const COMMUNITY_SCHEMA_VERSION = 1;
+const COMMUNITY_PREFERENCE_VERSION = 1;
 const POSITIVE_CACHE_MS = 30 * 60 * 1000;
 const NEGATIVE_CACHE_MS = 5 * 60 * 1000;
 const DEFAULT_TIMEOUT_MS = 8000;
@@ -42,6 +43,10 @@ function safeInteger(value, min, max) {
 function safeDecimal(value, min, max) {
   const n = Number(value);
   return Number.isFinite(n) && n >= min && n <= max ? n : null;
+}
+function resolveShareStatsSetting(settings) {
+  if (!isRecord(settings) || settings.communityPreferenceVersion !== COMMUNITY_PREFERENCE_VERSION) return true;
+  return settings.shareStats !== false;
 }
 
 // Converte somente os campos comunitários. "shinies" vem de shinyKills (encontrados/derrotados),
@@ -114,13 +119,21 @@ function parseAggregate(payload, species) {
   if (value == null) return null;
   if (!isRecord(value) || value.species !== species) throw new CommunityHttpError('invalid server response', 0, 'invalid_response');
 
-  const integerFields = ['contributors', 'kills', 'caught', 'shinies', 'thrown_a', 'thrown_b', 'ms'];
-  const decimalFields = ['caught_a', 'caught_b', 'catch_pct', 'catch_pct_a', 'catch_pct_b', 'kills_per_shiny'];
+  const integerFields = ['contributors'];
+  // Contagens agregadas podem ser fracionárias porque o servidor limita o peso de uma
+  // instalação muito grande antes de somá-la à amostra.
+  const numericFields = ['kills', 'caught', 'shinies', 'thrown_a', 'thrown_b', 'caught_a', 'caught_b', 'ms'];
+  const decimalFields = ['catch_pct', 'catch_pct_a', 'catch_pct_b', 'kills_per_shiny'];
   const result = { species };
 
   for (const key of integerFields) {
     const n = Number(value[key]);
     if (!Number.isSafeInteger(n) || n < 0) throw new CommunityHttpError('invalid server response', 0, 'invalid_response');
+    result[key] = n;
+  }
+  for (const key of numericFields) {
+    const n = Number(value[key]);
+    if (!Number.isFinite(n) || n < 0) throw new CommunityHttpError('invalid server response', 0, 'invalid_response');
     result[key] = n;
   }
   for (const key of decimalFields) {
@@ -143,6 +156,7 @@ function createCommunityClient(options = {}) {
   const cache = new Map();
   const inFlight = new Map();
   const activeSubmitControllers = new Set();
+  let cacheGeneration = 0;
 
   async function requestJson(url, init, suppliedController) {
     const controller = suppliedController || new AbortController();
@@ -197,27 +211,36 @@ function createCommunityClient(options = {}) {
     const time = now();
     if (cached && cached.expiresAt > time) return Promise.resolve(cached.value);
     if (cached) cache.delete(species);
-    if (inFlight.has(species)) return inFlight.get(species);
+    const activeRequest = inFlight.get(species);
+    if (activeRequest && activeRequest.generation === cacheGeneration) return activeRequest.promise;
 
-    const request = requestJson(`${baseUrl}/functions/v1/species-stats?species=${encodeURIComponent(species)}`, {
+    const requestGeneration = cacheGeneration;
+    let request;
+    request = requestJson(`${baseUrl}/functions/v1/species-stats?species=${encodeURIComponent(species)}&format=precise`, {
       method: 'GET',
       headers: { apikey: publishableKey, accept: 'application/json' },
     }).then((payload) => {
       const value = parseAggregate(payload, species);
-      cache.set(species, {
-        value,
-        expiresAt: now() + (value ? POSITIVE_CACHE_MS : NEGATIVE_CACHE_MS),
-      });
+      if (requestGeneration === cacheGeneration) {
+        cache.set(species, {
+          value,
+          expiresAt: now() + (value ? POSITIVE_CACHE_MS : NEGATIVE_CACHE_MS),
+        });
+      }
       return value;
-    }).finally(() => { inFlight.delete(species); });
+    }).finally(() => {
+      const current = inFlight.get(species);
+      if (current && current.promise === request) inFlight.delete(species);
+    });
 
-    inFlight.set(species, request);
+    inFlight.set(species, { generation: requestGeneration, promise: request });
     return request;
   }
 
   function clearCache(species) {
-    if (species === undefined) cache.clear();
-    else cache.delete(species);
+    cacheGeneration++;
+    if (species === undefined) { cache.clear(); inFlight.clear(); }
+    else { cache.delete(species); inFlight.delete(species); }
   }
 
   function abortSubmissions() {
@@ -231,8 +254,10 @@ module.exports = {
   SUPABASE_URL,
   SUPABASE_PUBLISHABLE_KEY,
   COMMUNITY_SCHEMA_VERSION,
+  COMMUNITY_PREFERENCE_VERSION,
   CommunityHttpError,
   CommunitySnapshotError,
+  resolveShareStatsSetting,
   huntLogToStats,
   buildSubmitPayload,
   createCommunityClient,

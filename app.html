@@ -220,6 +220,77 @@
   .hl-r .vl.dim{ color:var(--line2); }
   .hl-r .un{ color:var(--mut); font-weight:400; font-size:9.5px; }
   .hl-note{ font-size:9.5px; color:#5f6b80; line-height:1.5; padding:2px 2px 0; }
+
+  /* Hub de hunt. */
+  .hl-modal{ width:min(680px,100%); padding:18px 19px 16px; }
+  .hl-h{ margin-bottom:15px; }
+  .hl-h img{ width:58px; height:58px; flex-basis:58px; filter:drop-shadow(0 6px 10px rgba(0,0,0,.28)); }
+  .hl-h .sp{ font-size:18px; }
+  .hl-h .su{ margin-top:3px; }
+  .hl-badges{ display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
+  .hl-badge{ padding:3px 6px; border:1px solid var(--line2); border-radius:999px; background:#10151f; color:var(--mut); font-size:8.5px; font-weight:700; }
+  .hl-badge.live{ border-color:#285a39; background:#102118; color:#66d98f; }
+  .hl-badge.shared{ border-color:#3f4555; color:#b3bdcf; }
+  .hl-kpis{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; margin-bottom:14px; }
+  .hl-kpi{ min-width:0; padding:10px 10px 9px; border:1px solid var(--line); border-radius:11px; background:linear-gradient(160deg,#121824,#0e131c); }
+  .hl-kpi.gold{ border-color:#4a401c; background:linear-gradient(160deg,#1a180b,#11140d); }
+  .hl-kpi .k{ color:var(--mut); font-size:8.5px; font-weight:800; letter-spacing:.45px; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hl-kpi .n{ margin-top:4px; color:var(--txt); font-size:18px; font-weight:850; line-height:1.05; font-variant-numeric:tabular-nums; }
+  .hl-kpi.gold .n{ color:var(--gold); }
+  .hl-kpi .s{ min-height:14px; margin-top:4px; color:#6f7b90; font-size:8.5px; line-height:1.35; }
+  .hl-section{ margin:0 0 14px; }
+  .hl-section-title{ display:flex; align-items:center; gap:7px; margin:0 1px 7px; color:#9ca7ba; font-size:9.5px; font-weight:850; letter-spacing:.65px; text-transform:uppercase; }
+  .hl-section-title:after{ content:""; height:1px; flex:1 1 auto; background:rgba(44,54,72,.72); }
+  .hl-section-title small{ color:#59657a; font-size:8.5px; font-weight:600; letter-spacing:0; text-transform:none; }
+  .hl-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
+  .hl-panel{ min-width:0; padding:10px 11px; border:1px solid var(--line); border-radius:11px; background:rgba(13,17,25,.67); }
+  .hl-panel.shiny{ border-color:#493f18; background:linear-gradient(150deg,rgba(35,31,10,.72),rgba(16,18,15,.76)); }
+  .hl-panel .pt{ display:flex; align-items:baseline; gap:7px; margin-bottom:7px; color:#aeb8c9; font-size:10px; font-weight:800; }
+  .hl-panel .pt .big{ margin-left:auto; color:var(--txt); font-size:15px; font-variant-numeric:tabular-nums; }
+  .hl-panel.shiny .pt .big{ color:var(--gold); }
+  .hl-metric{ display:flex; align-items:baseline; gap:8px; min-height:21px; padding:3px 0; border-top:1px solid rgba(31,39,52,.7); }
+  .hl-metric:first-of-type{ border-top:0; }
+  .hl-metric .mk{ min-width:0; flex:1 1 auto; color:var(--mut); font-size:9.5px; line-height:1.35; }
+  .hl-metric .mv{ color:var(--txt); font-size:10.5px; font-weight:750; font-variant-numeric:tabular-nums; text-align:right; }
+  .hl-metric .mv.gold{ color:var(--gold); }
+  .hl-metric .mv small{ display:block; color:#657187; font-size:8px; font-weight:500; }
+  .hl-live-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:6px; }
+  .hl-live{ display:flex; align-items:center; gap:8px; padding:8px 9px; border:1px solid #283244; border-radius:10px; background:#101620; }
+  .hl-live.on{ border-color:#285a39; background:#102118; }
+  .hl-live .dot{ width:7px; height:7px; flex:0 0 7px; border-radius:50%; background:#58647a; box-shadow:0 0 0 3px rgba(88,100,122,.11); }
+  .hl-live.on .dot{ background:#53d383; box-shadow:0 0 0 3px rgba(83,211,131,.12); }
+  .hl-live .who{ min-width:0; flex:1 1 auto; color:#aeb7c7; font-size:9.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hl-live .value{ color:var(--txt); font-size:11px; font-weight:800; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .hl-compare{ overflow:hidden; border:1px solid var(--line); border-radius:11px; background:rgba(13,17,25,.62); }
+  .hl-compare-row{ display:grid; grid-template-columns:minmax(110px,1.3fr) repeat(2,minmax(105px,1fr)); gap:8px; align-items:center; padding:7px 10px; border-top:1px solid rgba(31,39,52,.72); }
+  .hl-compare-row:first-child{ border-top:0; background:rgba(24,30,43,.72); }
+  .hl-compare-row > span{ min-width:0; }
+  .hl-compare-row .label{ color:var(--mut); font-size:9.5px; }
+  .hl-compare-row .value{ color:var(--txt); font-size:10.5px; font-weight:750; text-align:right; font-variant-numeric:tabular-nums; }
+  .hl-compare-row .value.community{ color:#aeb8ca; }
+  .hl-compare-row.head span{ color:#657187; font-size:8.5px; font-weight:750; text-align:right; }
+  .hl-compare-row.head span:first-child{ text-align:left; }
+  .hl-sample-note{ margin:7px 2px 0; color:#667288; font-size:8.8px; line-height:1.45; }
+  .hl-ball-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
+  .hl-ball-grid .hl-ball{ margin:0; }
+  .hl-account-details{ margin-top:7px; border:1px solid rgba(31,39,52,.75); border-radius:9px; background:rgba(13,17,25,.42); }
+  .hl-account-details summary{ padding:7px 9px; color:#737f94; font-size:9px; cursor:pointer; list-style:none; }
+  .hl-account-details summary::-webkit-details-marker{ display:none; }
+  .hl-account-details summary:after{ content:"+"; float:right; color:#8c98aa; font-weight:800; }
+  .hl-account-details[open] summary:after{ content:"−"; }
+  .hl-account-list{ padding:0 9px 7px; }
+  .hl-account-row{ display:grid; grid-template-columns:minmax(90px,1fr) repeat(3,auto); gap:9px; padding:5px 0; border-top:1px solid rgba(31,39,52,.6); color:#778399; font-size:8.8px; }
+  .hl-account-row b{ color:#aeb8c9; font-weight:700; }
+  .hl-method{ margin-top:2px; }
+  .hl-method summary{ color:#59657a; font-size:9px; cursor:pointer; }
+  .hl-method p{ margin:6px 0 0; color:#59657a; font-size:8.8px; line-height:1.5; }
+  @media (max-width:620px){
+    .hl-back{ padding:10px; }
+    .hl-modal{ padding:15px 14px; }
+    .hl-kpis{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .hl-grid, .hl-ball-grid{ grid-template-columns:1fr; }
+    .hl-compare-row{ grid-template-columns:minmax(90px,1fr) repeat(2,minmax(80px,1fr)); padding-left:8px; padding-right:8px; }
+  }
 </style>
 </head>
 <body>
@@ -243,6 +314,7 @@
     <main class="main" id="main"></main>
   </div>
 </div>
+<script src="hunt-metrics.js"></script>
 <script>
   const P = window.poke || null;
   let accounts = [];
@@ -500,109 +572,183 @@
   function closeHuntLog(){ if (hlBack){ hlBack.remove(); hlBack = null; document.removeEventListener('keydown', hlEsc); } }
   function hlEsc(e){ if (e.key === 'Escape') closeHuntLog(); }
   function numVal(v){ const n = Number(v); return Number.isFinite(n) ? n : 0; }
-  function pctTxt(num, den){
-    const d = numVal(den);
-    if (!d) return '—';
-    return (Math.round(numVal(num) / d * 1000) / 10).toLocaleString('pt-BR', { minimumFractionDigits:1, maximumFractionDigits:1 }) + '%';
+  function contributorsTxt(n){
+    const value = Math.max(0, Math.round(numVal(n)));
+    return fmtInt(value) + ' instalação' + (value === 1 ? '' : 'ões');
   }
-  function pctValue(value, num, den){
-    let p = (value !== null && value !== undefined && value !== '') ? Number(value) : NaN;
-    if (!Number.isFinite(p)) { const d = numVal(den); p = d ? numVal(num) / d * 100 : NaN; }
-    return Number.isFinite(p) ? p.toLocaleString('pt-BR', { maximumFractionDigits:2 }) + '%' : '—';
+  const HM = window.HuntMetrics;
+  function huntPct(value){
+    if (value == null || value === '') return '—';
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    if (n === 0) return '0%';
+    if (n > 0 && n < .0001) return '&lt; 0,0001%';
+    const digits = Math.abs(n) < .01 ? 4 : (Math.abs(n) < 1 ? 3 : (Math.abs(n) < 10 ? 2 : 1));
+    return n.toLocaleString('pt-BR', { minimumFractionDigits:digits, maximumFractionDigits:digits }) + '%';
   }
-  function contributorsTxt(n){ const v = Math.max(0, Math.round(numVal(n))); return fmtInt(v) + ' colaborador' + (v === 1 ? '' : 'es'); }
-  function hlTile(k, n, cls){ return '<div class="st-t'+(cls?' '+cls:'')+'"><div class="k">'+k+'</div><div class="n">'+n+'</div></div>'; }
-  function huntLogHTML(sp, d, loadError){
+  function huntDec(value, digits){
+    if (value == null || value === '') return '—';
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    return n.toLocaleString('pt-BR', { minimumFractionDigits:0, maximumFractionDigits:digits == null ? 1 : digits });
+  }
+  function huntApprox(value){
+    if (value == null || value === '') return '—';
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    if (Math.abs(n - Math.round(n)) < .000001) return fmtInt(Math.round(n));
+    const abs = Math.abs(n);
+    if (abs > 0 && abs < .0001) return '&lt; 0,0001';
+    const digits = abs < .001 ? 4 : (abs < .01 ? 3 : (abs < .1 ? 2 : 1));
+    return '≈ ' + huntDec(n, digits);
+  }
+  function huntAgo(ts){
+    const delta = Date.now() - Number(ts);
+    if (!Number.isFinite(delta) || delta < 0) return '';
+    const min = Math.floor(delta / 60000);
+    if (min < 1) return 'agora';
+    if (min < 60) return 'há ' + min + ' min';
+    const hours = Math.floor(min / 60);
+    if (hours < 24) return 'há ' + hours + 'h';
+    return 'há ' + Math.floor(hours / 24) + 'd';
+  }
+  function huntKpi(label, value, sub, cls){
+    return '<div class="hl-kpi'+(cls ? ' '+cls : '')+'"><div class="k">'+label+'</div><div class="n">'+value+'</div><div class="s">'+(sub || '')+'</div></div>';
+  }
+  function huntMetric(label, value, cls, sub){
+    return '<div class="hl-metric"><span class="mk">'+label+'</span><span class="mv'+(cls ? ' '+cls : '')+'">'+value+(sub ? '<small>'+sub+'</small>' : '')+'</span></div>';
+  }
+  function observedRatio(total, events, unit){
+    const t = numVal(total), e = numVal(events);
+    if (!t) return '—';
+    if (!e) return 'nenhum em ' + fmtInt(Math.round(t));
+    return '1 em ' + fmtInt(Math.round(t / e)) + ' ' + unit;
+  }
+  function huntHubHTML(sp, d, loadError){
     d = d || {};
-    const community = d.community && typeof d.community === 'object' ? d.community : null;
     const local = {
       ms:numVal(d.ms), kills:numVal(d.kills), caught:numVal(d.caught), shinies:numVal(d.shinies),
+      shinyCaught:numVal(d.shinyCaught),
       thrownA:numVal(d.thrownA), thrownB:numVal(d.thrownB), caughtA:numVal(d.caughtA), caughtB:numVal(d.caughtB),
-      dryBalls:numVal(d.dryBalls)
+      captureDryBalls:Object.prototype.hasOwnProperty.call(d, 'captureDryBalls') ? numVal(d.captureDryBalls) : null,
+      dryBalls:Object.prototype.hasOwnProperty.call(d, 'dryBalls') ? numVal(d.dryBalls) : null,
+      dryKills:Object.prototype.hasOwnProperty.call(d, 'dryKills') ? numVal(d.dryKills) : null,
+      updated:numVal(d.updated)
     };
+    local.thrown = local.thrownA + local.thrownB;
+    const community = d.community && typeof d.community === 'object' ? d.community : null;
+    const communityError = d.communityError === true;
     const cm = community ? {
       contributors:numVal(community.contributors), kills:numVal(community.kills), caught:numVal(community.caught),
       shinies:numVal(community.shinies), thrownA:numVal(community.thrown_a), thrownB:numVal(community.thrown_b),
       caughtA:numVal(community.caught_a), caughtB:numVal(community.caught_b), ms:numVal(community.ms),
-      catchPct:community.catch_pct, catchPctA:community.catch_pct_a, catchPctB:community.catch_pct_b,
-      killsPerShiny:numVal(community.kills_per_shiny)
+      catchPct:community.catch_pct, catchPctA:community.catch_pct_a, catchPctB:community.catch_pct_b
     } : null;
-    const hasLocal = Object.keys(local).some(function(k){ return local[k] > 0; });
-    const hasCommunity = !!(cm && (cm.contributors || cm.kills || cm.caught || cm.thrownA || cm.thrownB));
+    if (cm) cm.thrown = cm.thrownA + cm.thrownB;
+    const localM = HM.describe(local);
+    const cmM = cm ? HM.describe({ kills:cm.kills, caught:cm.caught, shinies:cm.shinies, thrown:cm.thrown, ms:cm.ms }) : null;
+    const hasLocal = !!(local.ms || local.kills || local.caught || local.shinies || local.shinyCaught || local.thrown);
+    const hasCommunity = !!(cmM && (cm.contributors || cmM.kills || cmM.caught || cmM.shinies || cmM.thrown));
+    const enoughLocalRate = local.ms >= 10 * 60 * 1000 && local.kills >= 100;
+    const enoughCommunityRate = !!(cm && cm.ms >= 10 * 60 * 1000 && cm.kills >= 100);
+    const huntingNow = Math.max(0, Math.round(numVal(d.huntingNow)));
+    const mixedNow = Math.max(0, Math.round(numVal(d.mixedNow)));
+    const badges = (huntingNow ? '<span class="hl-badge live">'+huntingNow+' caçando agora</span>' : '')
+      + (mixedNow ? '<span class="hl-badge">'+mixedNow+' em hunt mista</span>' : '')
+      + (local.updated ? '<span class="hl-badge">atividade '+huntAgo(local.updated)+'</span>' : '')
+      + (hasCommunity ? '<span class="hl-badge shared">'+contributorsTxt(cm.contributors)+' na amostra</span>' : '');
+    const source = 'seu histórico de hunt';
     const spr = sprStatic(sp, false);
     const head = '<div class="hl-h">'
       + (spr ? '<img src="'+spr+'" alt="" onerror="this.style.display=\'none\'">' : '')
-      + '<div class="t"><div class="sp">'+esc(sp)+'</div><div class="su">'+(hasCommunity ? 'seus números e comunidade' : 'histórico acumulado')+'</div></div>'
+      + '<div class="t"><div class="sp">'+esc(sp)+'</div><div class="su">'+source+'</div><div class="hl-badges">'+badges+'</div></div>'
       + '<button class="x" id="hl-x" title="Fechar">✕</button></div>';
-    if (loadError) return head + '<div class="hl-empty">Não foi possível carregar as estatísticas agora. Confira sua conexão e tente novamente em instantes.</div>';
+
+    if (loadError) return head + '<div class="hl-empty">Não foi possível carregar o hub agora. Confira sua conexão e tente novamente em instantes.</div>';
     if (!hasLocal && !hasCommunity) {
-      // sem histórico ainda — mas o streak vem do jogo e já vale mostrar
-      const st0 = (d.streaks || []).filter(function(x){ return x && x.balls != null; });
-      const row0 = (lb, vl, cls) => '<div class="hl-r"><span class="lb">'+lb+'</span><span class="vl'+(cls?' '+cls:'')+'">'+vl+'</span></div>';
-      return head + '<div class="hl-empty">Ainda não há histórico para <b>'+esc(sp)+'</b>.<br>Assim que você caçar essa espécie com o launcher aberto, os números aparecem aqui e vão se acumulando.</div>'
-        + (st0.length ? '<div class="hl-sec" style="margin-top:12px">Streak atual — bolas sem capturar</div><div class="hl-rows">'
-            + st0.map(function(x){ return row0(esc(x.name) + (x.hunting ? ' <span class="un">· caçando agora</span>' : ''), fmtInt(x.balls), x.balls ? 'g' : 'dim'); }).join('')
-          + '</div>' : '');
+      return head + '<div class="hl-empty">'+(communityError
+        ? 'Ainda não há histórico para <b>'+esc(sp)+'</b> e a amostra da comunidade não pôde ser consultada agora.'
+        : (mixedNow
+          ? 'Esta espécie está em uma hunt mista. Para não inventar uma divisão, o launcher não atribui os totais globais a nenhuma das espécies.'
+          : 'Ainda não há histórico para <b>'+esc(sp)+'</b>. Deixe o launcher aberto durante uma hunt exclusiva desta espécie e os números começarão a aparecer.'))+'</div>';
     }
-    const thrown = local.thrownA + local.thrownB;
-    const localIntro = hasLocal ? '' : '<div class="hl-empty local">Você ainda não tem histórico local desta espécie. A amostra comunitária já pode ser consultada abaixo.</div>';
-    const tiles = hasLocal ? '<div class="hl-tiles">'
-      + hlTile('Tempo caçando', fmtDur(local.ms))
-      + hlTile('Encontros', fmtInt(local.kills))
-      + hlTile('Capturas', fmtInt(local.caught) + ' <span style="font-size:10px;color:var(--mut)">('+pctTxt(local.caught, local.kills)+')</span>')
-      + hlTile('Shinies', fmtInt(local.shinies), 'shiny gold')
-      + '</div>' : '';
 
-    const communitySummary = hasCommunity ? '<div class="hl-community">'
-      + '<div class="hc-top"><b>Amostra da comunidade</b><span>'+contributorsTxt(cm.contributors)+'</span></div>'
-      + '<div class="hc-main"><strong>'+fmtInt(Math.round(cm.kills))+'</strong> encontros · <strong>'+fmtInt(Math.round(cm.caught))+'</strong> capturas <span class="un">('+pctValue(cm.catchPct, cm.caught, cm.kills)+')</span></div>'
-      + '<div class="hc-sub">'+fmtInt(Math.round(cm.shinies))+' shinies encontrados/derrotados'
-        + (cm.killsPerShiny ? ' · 1 a cada '+fmtInt(Math.round(cm.killsPerShiny))+' encontros' : '')
-        + ' · '+fmtDur(cm.ms)+' de caçada somada</div>'
-      + '</div>' : '';
-
-    // "1 a cada N" — se ainda não houve o evento, mostra o que já se gastou sem ele
-    const row = (lb, vl, cls) => '<div class="hl-r"><span class="lb">'+lb+'</span><span class="vl'+(cls?' '+cls:'')+'">'+vl+'</span></div>';
-    const ratio = (tot, ev, un) => ev ? '1 <span class="un">a cada</span> ' + fmtInt(Math.round(tot / ev)) + ' <span class="un">'+un+'</span>' : '—';
-    const props = hasLocal ? '<div class="hl-sec">Proporções</div><div class="hl-rows">'
-      + row('Captura', ratio(local.kills, local.caught, 'encontros'), 'g')
-      + row('Shiny', ratio(local.kills, local.shinies, 'encontros'), 'g')
-      + row('Sem shiny há', fmtInt(local.dryBalls) + ' <span class="un">bolas</span>', local.dryBalls ? 'g' : 'dim')
-      + row('Bolas por captura', local.caught ? (Math.round(thrown / local.caught * 10) / 10).toLocaleString('pt-BR') : '—')
-      + row('Bolas por encontro', local.kills ? (Math.round(thrown / local.kills * 100) / 100).toLocaleString('pt-BR') : '—')
-      + row('Total de bolas jogadas', fmtInt(thrown))
-      + (!local.shinies && thrown ? row('Bolas jogadas sem nenhum shiny', fmtInt(thrown), 'dim') : '')
-      + '</div>' : '';
-
-    const perH = (n) => local.ms > 0 ? fmtInt(Math.round(n / (local.ms / 3600000))) + ' <span class="un">/h</span>' : '—';
-    const rates = hasLocal ? '<div class="hl-sec">Por hora de caçada</div><div class="hl-rows">'
-      + row('Encontros', perH(local.kills))
-      + row('Capturas', perH(local.caught))
-      + row('Shinies', local.shinies ? perH(local.shinies) : '<span class="dim">0 <span class="un">/h</span></span>', 'g')
-      + row('Bolas gastas', perH(thrown))
-      + '</div>' : '';
-
-    const ball = (nome, sprite, localThrown, localCaught, communityThrown, communityCaught, communityPct, nota) => {
-      const localOn = localThrown > 0, communityOn = hasCommunity && communityThrown > 0;
-      return '<div class="hl-ball cmp'+(localOn || communityOn ? '' : ' off')+'">'
-        + '<div class="hl-ball-head"><img src="'+sprItem(sprite)+'" alt="" onerror="this.style.display=\'none\'">'
-        + '<span class="bn">'+nome+(nota ? '<small>'+nota+'</small>' : '')+'</span></div>'
-        + '<div class="hl-cmp-r"><span class="who">Você</span><span class="sample">'+(localOn ? fmtInt(Math.round(localCaught))+' capturas em '+fmtInt(localThrown)+' bolas' : 'sem dados locais')+'</span><span class="pct">'+(localOn ? pctTxt(localCaught, localThrown) : '—')+'</span></div>'
-        + (hasCommunity ? '<div class="hl-cmp-r community"><span class="who">Comunidade</span><span class="sample">'+(communityOn ? fmtInt(Math.round(communityCaught))+' capturas em '+fmtInt(communityThrown)+' bolas · '+contributorsTxt(cm.contributors) : 'sem amostra para esta bola')+'</span><span class="pct">'+(communityOn ? pctValue(communityPct, communityCaught, communityThrown) : '—')+'</span></div>' : '')
+    const kpis = '<div class="hl-kpis">'
+      + huntKpi('Derrotados', hasLocal ? fmtInt(local.kills) : '—', hasLocal ? 'nesta base' : 'sem histórico')
+      + huntKpi('Capturas', hasLocal ? fmtInt(local.caught) : '—', local.kills ? huntPct(localM.catchPct)+' por derrotado' : 'sem histórico')
+      + huntKpi('Shinies', hasLocal ? fmtInt(local.shinies) : '—', local.kills ? huntPct(localM.shinyPct)+' por derrotado' : 'sem histórico', 'gold')
+      + huntKpi('Tempo de hunt', hasLocal ? fmtDur(local.ms) : '—', hasLocal ? 'somado entre contas' : 'sem histórico')
       + '</div>';
-    };
-    const balls = '<div class="hl-sec">Taxa de captura por bola</div>'
-      + ball('Poke Ball', 'poke-ball', local.thrownA, local.caughtA, cm ? cm.thrownA : 0, cm ? cm.caughtA : 0, cm ? cm.catchPctA : null, '')
-      + ball('Ultra / Premier', 'ultra-ball', local.thrownB, local.caughtB, cm ? cm.thrownB : 0, cm ? cm.caughtB : 0, cm ? cm.catchPctB : null, 'mesma chance');
 
-    // streak: vem ao vivo do jogo (bolas gastas desde a última captura dessa espécie)
-    const st = (d.streaks || []).filter(function(x){ return x && x.balls != null; });
-    const streak = st.length ? '<div class="hl-sec" style="margin-top:12px">Streak atual — bolas sem capturar</div><div class="hl-rows">'
-      + st.map(function(x){ return row(esc(x.name) + (x.hunting ? ' <span class="un">· caçando agora</span>' : ''), fmtInt(x.balls), x.balls ? 'g' : 'dim'); }).join('')
-      + '</div>' : '';
+    const live = local.captureDryBalls !== null || local.dryKills !== null || local.dryBalls !== null
+      ? '<div class="hl-section"><div class="hl-section-title">Sequências atuais <small>desde o último evento ou início desta base</small></div><div class="hl-live-grid">'
+        + (local.captureDryBalls !== null ? '<div class="hl-live"><span class="dot"></span><span class="who">Sem capturar</span><span class="value">'+fmtInt(local.captureDryBalls)+' bolas</span></div>' : '')
+        + (local.dryKills !== null ? '<div class="hl-live"><span class="dot"></span><span class="who">Desde o último shiny</span><span class="value">'+fmtInt(local.dryKills)+' derrotados</span></div>' : '')
+        + (local.dryBalls !== null ? '<div class="hl-live"><span class="dot"></span><span class="who">Bolas desde o último shiny</span><span class="value">'+fmtInt(local.dryBalls)+' bolas</span></div>' : '')
+        + '</div></div>' : '';
 
-    return head + localIntro + tiles + communitySummary + props + rates + balls + streak
-      + '<div class="hl-note">Bolas locais são contadas pela queda na mochila; aumento é drop, não conta. Ultra e Premier somam por terem a mesma chance. A comunidade mostra somente dados agregados de colaboradores anônimos.</div>';
+    let tracked = '';
+    if (hasLocal) {
+      const assigned = local.caughtA + local.caughtB;
+      const coverage = local.caught ? Math.min(100, assigned / local.caught * 100) : null;
+      const missingMinutes = Math.max(0, 10 - Math.floor(local.ms / 60000));
+      const missingKills = Math.max(0, 100 - local.kills);
+      const shortParts = [];
+      if (missingMinutes) shortParts.push('cerca de '+missingMinutes+' min');
+      if (missingKills) shortParts.push(missingKills+' derrotados');
+      tracked = '<div class="hl-section"><div class="hl-section-title">Resumo da hunt <small>histórico registrado pelo launcher</small></div><div class="hl-grid">'
+        + '<div class="hl-panel"><div class="pt">Ritmo <span class="big">'+fmtDur(local.ms)+'</span></div>'
+          + huntMetric('Derrotados por hora', enoughLocalRate ? huntDec(localM.perHour.kills, 0) : '—')
+          + huntMetric('Capturas por hora', enoughLocalRate ? huntDec(localM.perHour.caught, 1) : '—')
+          + huntMetric('Shinies por hora', enoughLocalRate ? huntDec(localM.perHour.shinies, 2) : '—', 'gold')
+          + huntMetric('Bolas por hora', enoughLocalRate ? huntDec(localM.perHour.thrown, 0) : '—')
+        + '</div>'
+        + '<div class="hl-panel"><div class="pt">Frequências <span class="big">'+huntPct(localM.catchPct)+'</span></div>'
+          + huntMetric('Captura', observedRatio(local.kills, local.caught, 'derrotados'))
+          + huntMetric('Shiny encontrado', observedRatio(local.kills, local.shinies, 'derrotados'), 'gold', huntPct(localM.shinyPct)+' na hunt')
+          + huntMetric('Shinies capturados', fmtInt(local.shinyCaught), 'gold', 'confirmados pela Box')
+          + huntMetric('Bolas por captura', huntDec(localM.ballsPerCatch, 1))
+          + huntMetric('Bolas por derrotado', huntDec(localM.ballsPerEncounter, 2))
+        + '</div></div>'
+        + (!enoughLocalRate ? '<div class="hl-sample-note">Amostra curta para ritmos por hora'+(shortParts.length ? ': faltam '+shortParts.join(' e ')+'.' : '.')+'</div>' : '')
+        + (coverage !== null && coverage < 99.9 ? '<div class="hl-sample-note">Atribuição por tipo de bola disponível para '+huntPct(coverage)+' das capturas.</div>' : '')
+      + '</div>';
+    }
+
+    function ballCard(name, sprite, thrownLocal, caughtLocal, thrownCommunity, caughtCommunity, pctCommunity, note){
+      const localOn = thrownLocal > 0, communityOn = hasCommunity && thrownCommunity > 0;
+      return '<div class="hl-ball cmp'+(localOn || communityOn ? '' : ' off')+'"><div class="hl-ball-head">'
+        + '<img src="'+sprItem(sprite)+'" alt="" onerror="this.style.display=\'none\'"><span class="bn">'+name+(note?'<small>'+note+'</small>':'')+'</span></div>'
+        + '<div class="hl-cmp-r"><span class="who">Sua hunt</span><span class="sample">'+(localOn ? '≈ '+huntDec(caughtLocal, 1)+' capturas atribuídas em '+fmtInt(thrownLocal)+' bolas' : 'sem histórico')+'</span><span class="pct">'+(localOn ? huntPct(HM.percentage(caughtLocal, thrownLocal)) : '—')+'</span></div>'
+        + (hasCommunity ? '<div class="hl-cmp-r community"><span class="who">Comunidade</span><span class="sample">'+(communityOn ? huntApprox(caughtCommunity)+' capturas em '+huntApprox(thrownCommunity)+' bolas' : 'sem dados ainda')+'</span><span class="pct">'+(communityOn ? huntPct(pctCommunity != null && pctCommunity !== '' && Number.isFinite(Number(pctCommunity)) ? Number(pctCommunity) : HM.percentage(caughtCommunity, thrownCommunity)) : '—')+'</span></div>' : '')
+      + '</div>';
+    }
+    const balls = (hasLocal || hasCommunity) ? '<div class="hl-section"><div class="hl-section-title">Bolas <small>taxa de captura por tipo</small></div><div class="hl-ball-grid">'
+      + ballCard('Poke Ball', 'poke-ball', local.thrownA, local.caughtA, cm ? cm.thrownA : 0, cm ? cm.caughtA : 0, cm ? cm.catchPctA : null, '')
+      + ballCard('Ultra / Premier', 'ultra-ball', local.thrownB, local.caughtB, cm ? cm.thrownB : 0, cm ? cm.caughtB : 0, cm ? cm.catchPctB : null, 'agrupadas por terem a mesma chance')
+      + '</div></div>' : '';
+
+    let shared = '';
+    if (hasCommunity) {
+      const value = function(v, formatter){ return v != null && v !== '' && Number.isFinite(Number(v)) ? formatter(v) : '—'; };
+      shared = '<div class="hl-section"><div class="hl-section-title">Amostra da comunidade <small>'+contributorsTxt(cm.contributors)+'</small></div><div class="hl-compare">'
+        + '<div class="hl-compare-row head"><span>Métrica</span><span>Sua hunt</span><span>Comunidade</span></div>'
+        + '<div class="hl-compare-row"><span class="label">Capturas por derrotado</span><span class="value">'+(hasLocal ? huntPct(localM.catchPct) : '—')+'</span><span class="value community">'+huntPct(cmM.catchPct)+'</span></div>'
+        + '<div class="hl-compare-row"><span class="label">Shinies por derrotado</span><span class="value">'+(hasLocal ? huntPct(localM.shinyPct) : '—')+'</span><span class="value community">'+huntPct(cmM.shinyPct)+'</span></div>'
+        + '<div class="hl-compare-row"><span class="label">Derrotados por hora</span><span class="value">'+(local.ms ? (enoughLocalRate ? value(localM.perHour.kills, function(v){ return huntDec(v,0); }) : 'amostra curta') : '—')+'</span><span class="value community">'+(cm.ms ? (enoughCommunityRate ? value(cmM.perHour.kills, function(v){ return huntDec(v,0); }) : 'amostra curta') : '—')+'</span></div>'
+        + '<div class="hl-compare-row"><span class="label">Bolas por captura</span><span class="value">'+(hasLocal ? value(localM.ballsPerCatch, function(v){ return huntDec(v,1); }) : '—')+'</span><span class="value community">'+value(cmM.ballsPerCatch, function(v){ return huntDec(v,1); })+'</span></div>'
+      + '</div><div class="hl-sample-note">Base de '+huntApprox(cm.kills)+' derrotados. '+(cm.contributors <= 1 ? 'No começo, a amostra pode vir somente desta instalação.' : 'A comunidade pode incluir os seus próprios dados se o compartilhamento estiver ativo.')+'</div></div>';
+    } else if (hasLocal) {
+      shared = '<div class="hl-section"><div class="hl-section-title">Amostra da comunidade</div><div class="hl-empty local">'
+        + (communityError ? 'A amostra não pôde ser consultada agora. Reabra o hub em instantes para tentar novamente.' : 'A comunidade ainda está formando uma amostra para esta espécie.')
+        + '</div></div>';
+    }
+
+    const localStatus = !hasLocal ? '<div class="hl-empty local">'+(mixedNow
+      ? 'O launcher detectou esta espécie em uma hunt mista e não distribuiu os totais entre as espécies.'
+      : 'Ainda não há histórico desta espécie.')+'</div>' : '';
+    const method = '<details class="hl-method"><summary>Como estes números são calculados</summary><p>O launcher calcula as diferenças entre leituras consecutivas enquanto está aberto; totais anteriores, Bestiary e Dex do jogo não entram. Ele só atribui números à espécie quando ela é a única da hunt, ignora intervalos acima de 60 segundos e evita duplicar o mesmo personagem aberto em duas telas. Se faltar uma leitura, inicia uma nova referência em vez de estimar o trecho desconhecido. Bolas são calculadas pela queda no inventário e capturas por tipo são estimadas. A frequência shiny vem do histórico, não é uma chance oficial. A comunidade reúne anonimamente os mesmos contadores.</p></details>';
+    return head + kpis + localStatus + live + tracked + balls + shared + method;
   }
   function openHuntLog(sp){
     if (!sp) return;
@@ -611,12 +757,13 @@
     hlBack.className = 'hl-back';
     hlBack.innerHTML = '<div class="hl-modal"><div class="hl-empty">Carregando…</div></div>';
     document.body.appendChild(hlBack);
-    hlBack.addEventListener('click', function(e){ if (e.target === hlBack) closeHuntLog(); });
+    const back = hlBack;
+    back.addEventListener('click', function(e){ if (e.target === back) closeHuntLog(); });
     document.addEventListener('keydown', hlEsc);
     const fill = function(d, loadError){
-      if (!hlBack) return;
-      hlBack.querySelector('.hl-modal').innerHTML = huntLogHTML(sp, d, loadError);
-      const x = hlBack.querySelector('#hl-x'); if (x) x.onclick = closeHuntLog;
+      if (hlBack !== back || !back.isConnected) return;
+      back.querySelector('.hl-modal').innerHTML = huntHubHTML(sp, d, loadError);
+      const x = back.querySelector('#hl-x'); if (x) x.onclick = closeHuntLog;
     };
     if (P && P.getHuntLog) P.getHuntLog(sp).then(function(d){ fill(d, false); }).catch(function(){ fill(null, true); });
     else fill(null, true);
@@ -629,8 +776,7 @@
     openHuntLog(b.dataset.sp);
   });
 
-  // ---- Stats: totais do jogo + taxas desta sessão, por conta ----
-  const DEX_TOTAL = DEX_LIST.length;   // espécies que o launcher conhece (Kanto+Johto)
+  // ---- Stats: números desta sessão, por conta ----
   let statsOpen = false, statsTimer = null;
   function fmtInt(n){ return n == null ? '—' : (n).toLocaleString('pt-BR'); }
   function fmtDur(ms){
@@ -642,28 +788,19 @@
     return '<div class="st-t'+(cls?' '+cls:'')+'"><div class="k">'+k+'</div><div class="n">'+n+'</div>'
       + (rate ? '<div class="r">'+rate+'</div>' : '') + '</div>';
   }
-  function bar(cur, total, sh){
-    const pct = total ? Math.min(Math.round((cur || 0) / total * 100), 100) : 0;
-    return '<div class="st-bar'+(sh?' sh':'')+'"><span style="width:'+pct+'%"></span></div>';
-  }
   function statCard(r, isTotal){
     const lv = !isTotal && (r.trainerLevel != null || r.activeLevel != null)
       ? '<span class="lv">Treinador <b style="color:var(--txt)">'+(r.trainerLevel != null ? r.trainerLevel : '—')+'</b> · Ativo Lv '+(r.activeLevel != null ? r.activeLevel : '—')+'</span>' : '';
     const sess = r.sessionMs ? '<span class="sess">⏱ '+fmtDur(r.sessionMs)+'</span>' : '';
     const ph = r.perHour || {};
-    const dex = !isTotal ? '<div class="st-dex">'
-        + '<div class="lbl"><span>Pokédex</span><b>'+fmtInt(r.species)+' / '+DEX_TOTAL+'</b></div>' + bar(r.species, DEX_TOTAL)
-        + '<div class="lbl" style="margin-top:6px"><span>Shiny</span><b>'+fmtInt(r.shinySpecies)+' / '+DEX_TOTAL+'</b></div>' + bar(r.shinySpecies, DEX_TOTAL, true)
-      + '</div>' : '';
     const h = r.hunt;
     const foot = !isTotal && h ? '<div class="st-foot">'
-        + '<div class="hd">🗺 Caçada atual: <b>'+esc(h.species || titce(h.id || '—'))+'</b> <span class="ago">· '+fmtDur(h.ms)+'</span>'
+        + '<div class="hd">🗺 Caçada atual: <b>'+(h.mixed ? 'hunt com '+fmtInt(h.speciesCount)+' espécies' : esc(h.species || titce(h.id || '—')))+'</b> <span class="ago">· '+fmtDur(h.ms)+'</span>'
           + (h.species ? '<span class="hl-btn" data-sp="'+esc(h.species)+'" title="Histórico acumulado dessa espécie">+</span>' : '') + '</div>'
         + '<div>⚔ <b>'+fmtInt(h.kills)+'</b> encontros · <b>'+fmtInt(h.caught)+'</b> capturas'
           + (h.catchRate != null ? ' (<b>'+h.catchRate+'%</b>)' : '') + '</div>'
         + '<div>✨ <b>'+fmtInt(h.shinies)+'</b> shiny' + (h.shinies === 1 ? '' : 's')
           + (h.shinyRatio ? ' · 1 a cada <b>'+fmtInt(h.shinyRatio)+'</b>' : '') + '</div>'
-        + (h.ballsSince != null ? '<div class="warn">🎯 <b>'+fmtInt(h.ballsSince)+'</b> bolas desde a última captura</div>' : '')
       + '</div>' : '';
     return '<div class="st-card'+(isTotal?' total':'')+'">'
       + '<div class="st-head"><span class="nm">'+(isTotal ? '🏆 Todas as contas' : esc(r.name))+'</span>'+lv+sess+'</div>'
@@ -672,7 +809,7 @@
         + tile('Shinies', fmtInt(r.shinies), 'shiny gold', rateTxt(ph.shinies))
         + tile('Encontros', fmtInt(r.kills), '', rateTxt(ph.kills))
         + tile('Dinheiro', fmtInt(r.money), 'gold', rateTxt(ph.money))
-      + '</div>' + dex + foot
+      + '</div>' + foot
     + '</div>';
   }
   function sumStats(rows){
@@ -697,7 +834,7 @@
         + '<div class="box-top">'
           + '<b>📊 Stats</b>'
           + '<span class="box-count">'+rows.length+(rows.length === 1 ? ' conta' : ' contas')+'</span>'
-          + '<span style="font-size:10.5px;color:var(--mut)">as taxas /h são desta sessão · atualiza sozinho</span>'
+          + '<span style="font-size:10.5px;color:var(--mut)">números desta sessão · atualiza sozinho</span>'
         + '</div>'
         + '<div class="st-scroll">' + body + '</div>'
       + '</div>';

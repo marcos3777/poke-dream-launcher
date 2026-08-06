@@ -6,7 +6,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 const zlib = require('zlib');
 const { autoUpdater } = require('electron-updater');
-const { createCommunityClient } = require('./community');
+const { COMMUNITY_PREFERENCE_VERSION, createCommunityClient, resolveShareStatsSetting } = require('./community');
+const { enqueueStateUpdate, recordObservation } = require('./hunt-metrics');
 
 const GAME_URL = 'https://pokedream.com.br/';
 const GAME_DOMAIN = 'pokedream.com.br';
@@ -14,9 +15,9 @@ const MAXV = 4;
 const BAR = 46;
 const SIDE_W = 220;
 const GAP = 3;
-const COMMUNITY_SEND_INTERVAL_MS = 15 * 60 * 1000;
+const COMMUNITY_SEND_INTERVAL_MS = 5 * 60 * 1000 + 5000;
 const COMMUNITY_QUIT_TIMEOUT_MS = 3000;
-const COMMUNITY_CONFLICT_RETRY_MS = 5 * 60 * 1000 + 1000;
+const COMMUNITY_HUB_WAIT_MS = 1500;
 
 // userData persistente (nao some ao fechar)
 app.setPath('userData', path.join(app.getPath('appData'), 'poke-dream-launcher'));
@@ -43,13 +44,15 @@ let soundPath = null;      // caminho de um áudio do PC do usuário; null = som
 let itemVis = { poke_ball: true, ultra_ball: true, premier_ball: true, potion: true, revive: true };  // quais itens aparecem na barra
 let itemAlert = { poke_ball: 2000, ultra_ball: 2000, premier_ball: 2000, potion: 2000, revive: 500 };  // limite p/ borda vermelha (0 = sem alerta)
 let clientId = null;        // id anônimo e aleatório; só serve pra deduplicar o envio ao banco comunitário
-let shareStats = false;     // opt-in do envio (desligado por padrão)
+let shareStats = true;      // ligado por padrão; o usuário pode desligar nas configurações
 let communityToken = null;  // segredo aleatório desta instalação; nunca é exposto à interface
 let communityRevision = 0;  // ordem monotônica dos snapshots (evita um envio antigo sobrescrever o novo)
 let communityLastSuccessAt = 0;
 let communityLastError = null;
 let communitySubmitInFlight = null;
+let communitySyncInFlight = null;
 let communityTimer = null;
+let communityNextSyncAt = 0;
 let huntLogSaveTimer = null;
 let persistentStateLoaded = false;
 let communityQuitPending = false;
@@ -65,9 +68,9 @@ function diagWrite(obj) {
 // as 4 telas mandam praticamente a mesma coisa -> grava só a PRIMEIRA tela (1º card da lista) pra não poluir o dump
 function isDumpSlot(slot) { return games.length > 0 && games[0].slot === slot; }
 function dumpWs(slot, dir, payload, isBinary) {
-  if (isBinary) {   // frame binário (opcode 2) — payload vem base64; guarda cru pra decodificar na análise
-    let raw = payload; if (raw && raw.length > 200000) raw = raw.slice(0, 200000);
-    diagWrite({ slot, ts: Date.now(), kind: 'ws', dir, type: 'binary', b64: true, raw });
+  if (isBinary) {   // frames binários podem conter credenciais e não são gravados em claro
+    const size = Math.floor(String(payload || '').length * 3 / 4);
+    diagWrite({ slot, ts: Date.now(), kind: 'ws', dir, type: 'binary', raw: '<binary omitted>', size });
     return;
   }
   let type = 'unknown';
@@ -84,17 +87,62 @@ function dumpWs(slot, dir, payload, isBinary) {
       const j = JSON.parse(s); if (j && j.type) type = j.type;
     }
   } catch {}
-  diagWrite({ slot, ts: Date.now(), kind: 'ws', dir, type, raw: payload });
+  diagWrite({ slot, ts: Date.now(), kind: 'ws', dir, type, raw: diagWsPayload(payload) });
 }
 const REDACT = /([?&](?:token|access_token|jwt|auth|refresh(?:Token)?|password)=)[^&]*/gi;
+const SENSITIVE_DIAG_KEY = /^(?:(?:access|refresh|auth|id)?_?token|jwt|password|authorization|secret|email|api_?key|character_?id|user_?id|account_?id)$/i;
+const IDENTITY_DIAG_KEY = /^(?:id|name|display_?name|username)$/i;
+function diagUrl(url) {
+  return String(url).replace(REDACT, '$1<redacted>').replace(/(\/characters\/)[^/?]+/gi, '$1<redacted>');
+}
+function redactDiagValue(value, depth = 0, redactIdentity = false) {
+  if (depth > 12 || value == null) return value;
+  if (Array.isArray(value)) return value.map((entry) => redactDiagValue(entry, depth + 1, redactIdentity));
+  if (typeof value === 'object') {
+    const clean = {};
+    for (const [key, entry] of Object.entries(value)) {
+      clean[key] = (SENSITIVE_DIAG_KEY.test(key) || (redactIdentity && IDENTITY_DIAG_KEY.test(key)))
+        ? '<redacted>'
+        : redactDiagValue(entry, depth + 1, redactIdentity);
+    }
+    return clean;
+  }
+  if (typeof value === 'string' && /^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value)) return '<redacted-jwt>';
+  return value;
+}
+function isIdentityDiagUrl(url) {
+  return /\/auth(?:\/|\?|$)|\/characters(?:\?|$)/i.test(String(url || ''));
+}
+function diagBody(body, url) {
+  const redactIdentity = isIdentityDiagUrl(url);
+  try { return JSON.stringify(redactDiagValue(JSON.parse(body), 0, redactIdentity)); }
+  catch {
+    let text = String(body || '')
+      .replace(REDACT, '$1<redacted>')
+      .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '<redacted-jwt>')
+      .replace(/("(?:accessToken|refreshToken|token|password|email)"\s*:\s*")[^"]*(")/gi, '$1<redacted>$2');
+    if (redactIdentity) text = text.replace(/("(?:id|name|displayName|username)"\s*:\s*)(?:"[^"]*"|[0-9]+)/gi, '$1"<redacted>"');
+    return text;
+  }
+}
+function diagWsPayload(payload) {
+  const text = String(payload || '');
+  const socket = text.match(/^(\d+(?:\/[^,[]+)?,?)(\[[\s\S]*)$/);
+  if (socket) {
+    try { return socket[1] + JSON.stringify(redactDiagValue(JSON.parse(socket[2]))); }
+    catch {}
+  }
+  return diagBody(text);
+}
 function dumpHttp(slot, url, body, b64) {
   let raw = body; if (b64) { try { raw = Buffer.from(body, 'base64').toString('utf8'); } catch {} }
+  raw = diagBody(raw, url);
   if (raw && raw.length > 1000000) raw = raw.slice(0, 1000000) + '…[truncado]';
-  diagWrite({ slot, ts: Date.now(), kind: 'http', url: String(url).replace(REDACT, '$1<redacted>'), raw });
+  diagWrite({ slot, ts: Date.now(), kind: 'http', url: diagUrl(url), raw });
 }
 function dumpHttpReq(slot, url, body) {   // corpo do REQUEST (ex.: POST /save carrega o estado)
-  let raw = body; if (raw && raw.length > 1000000) raw = raw.slice(0, 1000000) + '…[truncado]';
-  diagWrite({ slot, ts: Date.now(), kind: 'http-req', url: String(url).replace(REDACT, '$1<redacted>'), raw });
+  let raw = diagBody(body, url); if (raw && raw.length > 1000000) raw = raw.slice(0, 1000000) + '…[truncado]';
+  diagWrite({ slot, ts: Date.now(), kind: 'http-req', url: diagUrl(url), raw });
 }
 
 // ---- extrai nome / hunt / pokémon ATIVO do estado pra alimentar a sidebar ----
@@ -120,7 +168,7 @@ function refreshActive(g) {
 function rebuildBox(g, boxArr) {
   g._box = {};
   for (const p of boxArr) if (p && p.uid != null) g._box[p.uid] = { uid: p.uid, species: p.species, level: p.level, xp: p.xp, shiny: !!p.shiny, potential: p.potential, essence: p.essence, stored: p.stored };
-  checkShinyCaptures(g);
+  g._freshShinyBatch = checkShinyCaptures(g);
 }
 function checkShinyCaptures(g) {
   const known = g._shinyUids || (g._shinyUids = new Set());
@@ -129,6 +177,7 @@ function checkShinyCaptures(g) {
   for (const uid in g._box) { const p = g._box[uid]; if (p && p.shiny && !known.has(uid)) { known.add(uid); if (!first) fresh.push(p); } }
   g._baselineDone = true;
   if (!first && dashView) for (const p of fresh) send(dashView, 'shiny-caught', { slot: g.slot, species: p.species });
+  return fresh.map((p) => p.species);
 }
 // estatísticas: guarda os contadores que o jogo manda (cheios no /offline, parciais no /save)
 // + um baseline com timestamp, pra calcular as taxas da sessão (por hora).
@@ -137,19 +186,27 @@ function grabStats(g, prog) {
   if (!prog) return;
   const s = g._stats || (g._stats = {});
   for (const k of STAT_NUMS) if (typeof prog[k] === 'number') s[k] = prog[k];
-  if (Array.isArray(prog.caughtSpecies)) s.species = prog.caughtSpecies.length;
-  if (Array.isArray(prog.caughtShinySpecies)) s.shinySpecies = prog.caughtShinySpecies.length;
-  if (prog.ballsSinceCapture && typeof prog.ballsSinceCapture === 'object') s.ballsSince = prog.ballsSinceCapture;
   // espécie da hunt atual: o wilds traz a grafia exata (ex. "MrMime"), melhor que derivar do huntId
-  if (Array.isArray(prog.wilds) && prog.wilds.length) {
-    const w = prog.wilds.find(x => x && (x.spawnSpecies || x.species));
-    if (w) s.huntSpecies = w.spawnSpecies || w.species;
+  if (Array.isArray(prog.wilds)) {
+    const species = [...new Set(prog.wilds.map(x => x && (x.spawnSpecies || x.species)).filter(Boolean))];
+    s.huntSpeciesList = species;
+    s.huntSpecies = species[0] || null;
   }
   // baseline da sessão: 1ª leitura vira a referência pras taxas /h
   if (!g._statBase && s.kills != null) g._statBase = { ts: Date.now(), totalCaught: s.totalCaught, kills: s.kills, shinyKills: s.shinyKills, money: s.money };
+  if (g._statBase) {
+    for (const k of ['totalCaught', 'kills', 'shinyKills', 'money']) {
+      if (g._statBase[k] == null && s[k] != null) g._statBase[k] = s[k];
+    }
+  }
   // baseline da HUNT: zera sempre que a hunt muda, pra medir só a caçada atual
   if (s.kills != null && (!g._huntBase || g._huntBase.huntId !== g.hunt)) {
     g._huntBase = { huntId: g.hunt, ts: Date.now(), totalCaught: s.totalCaught, kills: s.kills, shinyKills: s.shinyKills };
+  }
+  if (g._huntBase) {
+    for (const k of ['totalCaught', 'kills', 'shinyKills']) {
+      if (g._huntBase[k] == null && s[k] != null) g._huntBase[k] = s[k];
+    }
   }
   accumulateHuntLog(g, prog, s);
 }
@@ -158,70 +215,93 @@ function grabStats(g, prog) {
 // As bolas são agrupadas por chance de captura: Poke de um lado, Ultra+Premier do outro.
 const BALL_A = ['poke_ball'], BALL_B = ['ultra_ball', 'premier_ball'];
 const MAX_GAP_MS = 60000;   // pausa maior que isso não conta como tempo de caçada
-let huntLog = {}, huntLogDirty = false;
+let huntLog = {}, huntLogDirty = false, legacyHuntLog = null;
 
 function sumBalls(bag, keys) { let n = 0; for (const k of keys) n += (bag && bag[k]) || 0; return n; }
 function huntEntry(sp) {
-  return huntLog[sp] || (huntLog[sp] = { ms: 0, kills: 0, caught: 0, shinies: 0, thrownA: 0, thrownB: 0, caughtA: 0, caughtB: 0, dryBalls: 0, dryKills: 0, updated: 0 });
+  return huntLog[sp] || (huntLog[sp] = { ms: 0, kills: 0, caught: 0, shinies: 0, shinyCaught: 0, thrownA: 0, thrownB: 0, caughtA: 0, caughtB: 0, captureDryBalls: 0, dryBalls: 0, dryKills: 0, updated: 0 });
 }
 function accumulateHuntLog(g, prog, s) {
   const sp = s.huntSpecies;
+  const speciesList = Array.isArray(s.huntSpeciesList) && s.huntSpeciesList.length ? s.huntSpeciesList : (sp ? [sp] : []);
   const prev = g._accPrev;
   const now = Date.now();
   // a bag só vem no /save quando muda; sem isso a leitura viraria null e o delta seguinte se perdia
   const bag = prog.bag || g._bag;
   // shinyKills conta shinies encontrados/derrotados; capturas continuam separadas em totalCaught.
-  const cur = { ts: now, species: sp, kills: s.kills, caught: s.totalCaught, shinies: s.shinyKills,
+  const cur = { ts: now, huntId: g.hunt, species: sp, speciesCount: speciesList.length, kills: s.kills, caught: s.totalCaught, shinies: s.shinyKills,
                 ballA: bag ? sumBalls(bag, BALL_A) : null, ballB: bag ? sumBalls(bag, BALL_B) : null };
   g._accPrev = cur;
-  if (!sp || !prev || prev.species !== sp) return;   // trocou de hunt (ou 1ª leitura): só reinicia a referência
+  const primaryObserver = g._charId ? games.find((other) => other._charId === g._charId) : null;
+  if (primaryObserver && primaryObserver !== g) return;
+  // Os contadores globais não dizem qual espécie mudou. Em hunts com várias espécies, o
+  // launcher não inventa uma atribuição por espécie.
+  if (!sp || speciesList.length !== 1 || !prev || prev.speciesCount !== 1 || prev.huntId !== g.hunt || prev.species !== sp) return;
 
   const e = huntEntry(sp);
   const gap = now - prev.ts;
   const timeAdvanced = gap > 0 && gap < MAX_GAP_MS;
-  if (timeAdvanced) e.ms += gap;
 
   const dKills = (cur.kills != null && prev.kills != null) ? Math.max(cur.kills - prev.kills, 0) : 0;
   const dCaught = (cur.caught != null && prev.caught != null) ? Math.max(cur.caught - prev.caught, 0) : 0;
   const dShiny = (cur.shinies != null && prev.shinies != null) ? Math.max(cur.shinies - prev.shinies, 0) : 0;
-  e.kills += dKills; e.caught += dCaught; e.shinies += dShiny;
-
   // bolas: só QUEDA conta como lançamento (aumento é drop/compra)
   const tA = (cur.ballA != null && prev.ballA != null) ? Math.max(prev.ballA - cur.ballA, 0) : 0;
   const tB = (cur.ballB != null && prev.ballB != null) ? Math.max(prev.ballB - cur.ballB, 0) : 0;
-  e.thrownA += tA; e.thrownB += tB;
-  // seca de shiny: acumula e zera quando cai um (campos podem não existir em histórico antigo)
-  e.dryBalls = (e.dryBalls || 0) + tA + tB;
-  e.dryKills = (e.dryKills || 0) + dKills;
-  if (dShiny) { e.dryBalls = 0; e.dryKills = 0; }
-  // Atribui as capturas ao grupo que gastou bola. Se a captura caiu numa janela sem leitura de
-  // bag, fica pendente e entra na próxima que tiver — assim nenhuma captura se perde.
-  if (dCaught) e.pend = (e.pend || 0) + dCaught;
-  if (e.pend && (tA || tB)) {
-    const p = e.pend; e.pend = 0;
-    if (!tA) e.caughtB += p;
-    else if (!tB) e.caughtA += p;
-    else { const a = p * tA / (tA + tB); e.caughtA += a; e.caughtB += p - a; }
-  }
-  if (dKills || dCaught || dShiny || tA || tB) e.updated = now;
-  if (timeAdvanced || dKills || dCaught || dShiny || tA || tB) huntLogDirty = true;
+  const confirmedShinyCaught = dCaught && Array.isArray(g._freshShinyBatch)
+    ? g._freshShinyBatch.filter((species) => species === sp).length
+    : 0;
+  if (recordObservation(e, {
+    ms: timeAdvanced ? gap : 0,
+    kills: dKills,
+    caught: dCaught,
+    shinies: dShiny,
+    shinyCaught: confirmedShinyCaught,
+    thrownA: tA,
+    thrownB: tB,
+    now,
+  })) huntLogDirty = true;
 }
-// v2: antes da correção a contagem de bolas perdia deltas (a bag só vem no /save quando muda),
-// então o histórico ficava subestimado. Versão diferente = começa limpo.
-const HUNTLOG_V = 2;
+// v3: nova época confiável, formada apenas por diferenças observadas pelo launcher em hunts
+// de uma única espécie. Históricos anteriores são descartados para não carregar atribuições mistas.
+const HUNTLOG_V = 3;
 function loadHuntLog() {
   const j = readJsonWithBackup(HUNTLOG_FILE);
-  huntLog = (j && j.v === HUNTLOG_V && j.data && typeof j.data === 'object') ? j.data : {};
+  const valid = !!(j && j.v === HUNTLOG_V && j.data && typeof j.data === 'object');
+  huntLog = valid ? j.data : {};
+  legacyHuntLog = j && !valid ? j : null;
+  if (legacyHuntLog) huntLogDirty = true;
+}
+function preserveLegacyHuntLog() {
+  if (!legacyHuntLog) return true;
+  const version = Number.isSafeInteger(legacyHuntLog.v) && legacyHuntLog.v >= 0 ? `v${legacyHuntLog.v}` : 'legacy';
+  const file = `${HUNTLOG_FILE}.${version}.bak`;
+  try {
+    const existing = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (existing && existing.v === legacyHuntLog.v) { legacyHuntLog = null; return true; }
+  } catch {}
+  if (!writeJsonAtomic(file, legacyHuntLog)) return false;
+  legacyHuntLog = null;
+  return true;
 }
 function saveHuntLog() {
   if (!huntLogDirty || !HUNTLOG_FILE) return;
+  if (!preserveLegacyHuntLog()) return;
   if (writeJsonAtomic(HUNTLOG_FILE, { v: HUNTLOG_V, data: huntLog })) huntLogDirty = false;
+}
+function updateHunt(g, huntId) {
+  if (huntId == null || huntId === g.hunt) return false;
+  g.hunt = huntId;
+  g._accPrev = null;
+  if (g._stats) { g._stats.huntSpecies = null; g._stats.huntSpeciesList = []; }
+  return true;
 }
 function applyState(g, state) {   // estado COMPLETO (/offline ou /save cheio): guarda o box e o ativo
   if (!state) return false;
   const prog = state.progress || state;
   let changed = false;
-  if (state.huntId != null && state.huntId !== g.hunt) { g.hunt = state.huntId; changed = true; }
+  g._freshShinyBatch = [];
+  if (updateHunt(g, state.huntId)) changed = true;
   if (Array.isArray(prog.box)) rebuildBox(g, prog.box);
   grabStats(g, prog);
   if (prog.bag && typeof prog.bag === 'object') g._bag = prog.bag;   // mochila (item -> qtd); vem cheia
@@ -233,7 +313,8 @@ function applyState(g, state) {   // estado COMPLETO (/offline ou /save cheio): 
 }
 function applyPatch(g, patch) {   // delta descomprimido: campos que MUDARAM (activeUid, huntId, boxDelta com xp, box cheio na captura)
   let changed = false;
-  if (patch.huntId != null && patch.huntId !== g.hunt) { g.hunt = patch.huntId; changed = true; }
+  g._freshShinyBatch = [];
+  if (updateHunt(g, patch.huntId)) changed = true;
   const prog = patch.progress || {};
   if (Array.isArray(prog.box)) rebuildBox(g, prog.box);   // captura online reenvia o box inteiro aqui
   else if (patch.boxDelta && g._box) for (const uid in patch.boxDelta) { const d = patch.boxDelta[uid], e = g._box[uid]; if (e && d) { if (d.level != null) e.level = d.level; if (d.xp != null) e.xp = d.xp; } }
@@ -245,16 +326,57 @@ function applyPatch(g, patch) {   // delta descomprimido: campos que MUDARAM (ac
   if (refreshActive(g)) changed = true;
   return changed;
 }
+function resetCurrentHuntSequences(g) {
+  const s = g._stats || {};
+  const species = Array.isArray(s.huntSpeciesList) && s.huntSpeciesList.length === 1 ? s.huntSpeciesList[0] : null;
+  const entry = species && huntLog[species];
+  if (!entry) return;
+  entry.captureDryBalls = 0;
+  entry.dryBalls = 0;
+  entry.dryKills = 0;
+  entry.pend = 0;
+  huntLogDirty = true;
+}
+function resetUncertainHuntWindow(g) {
+  g._accPrev = null;
+  resetCurrentHuntSequences(g);
+}
+function resetCharacterState(g) {
+  g._stats = null; g._statBase = null; g._huntBase = null; g._accPrev = null;
+  g._box = {}; g._party = []; g._activeUid = null; g._bag = null; g._money = null;
+  g._sig = null; g.active = null; g.party2 = null; g.hunt = null;
+  g._shinyUids = new Set(); g._baselineDone = false; g._stateOrder = null; g.charName = null;
+}
+function payloadStateVersion(envelope) {
+  const baseVersion = Number(envelope && envelope.baseVersion);
+  if (Number.isSafeInteger(baseVersion) && baseVersion >= 0 && baseVersion < Number.MAX_SAFE_INTEGER) return baseVersion + 1;
+  const version = Number(envelope && envelope.version);
+  return Number.isSafeInteger(version) && version >= 0 ? version : null;
+}
 function feedState(g, url, body) {   // usado por /offline (resposta) e /save (request)
-  const m = url.match(/\/characters\/([^/]+)\//); if (m) g._charId = m[1];
+  const m = url.match(/\/characters\/([^/]+)\//);
   let j; try { j = JSON.parse(body); } catch { return; }
+  if (m && g._charId && g._charId !== m[1]) resetCharacterState(g);
+  if (m) g._charId = m[1];
+  const stateVersion = payloadStateVersion(j);
   const st = j.state || j;
-  let changed;
-  if (st.patchGz) {   // /save delta: patch gzipado -> descomprime e aplica só o que mudou
-    let patch; try { patch = JSON.parse(zlib.gunzipSync(Buffer.from(st.patchGz, 'base64')).toString('utf8')); } catch { return; }
-    changed = applyPatch(g, patch);
+  let decoded, full;
+  if (st.patchGz || st.stateGz) {
+    const packed = st.patchGz || st.stateGz;
+    try { decoded = JSON.parse(zlib.gunzipSync(Buffer.from(packed, 'base64')).toString('utf8')); } catch { return; }
+    full = !!st.stateGz;
   } else {
-    changed = applyState(g, st.progress ? st : (j.state || null));
+    decoded = st.progress ? st : (j.state || null);
+    full = true;
+  }
+  if (!decoded) return;
+  const order = g._stateOrder || (g._stateOrder = { version: null, pending: new Map() });
+  const ready = enqueueStateUpdate(order, { version: stateVersion, full, decoded });
+  let changed = false;
+  for (const update of ready) {
+    if (update.resetBaseline) resetUncertainHuntWindow(g);
+    changed = (update.full ? applyState(g, update.decoded) : applyPatch(g, update.decoded)) || changed;
+    if (update.resetBaseline) resetCurrentHuntSequences(g);
   }
   resolveName(g);
   if (changed || m) pushAccounts();
@@ -627,7 +749,7 @@ function loadSettings() {
     soundPath = (typeof j.soundPath === 'string' && j.soundPath) ? j.soundPath : null;
     if (j.itemVis && typeof j.itemVis === 'object') for (const k in itemVis) itemVis[k] = j.itemVis[k] !== false;
     if (j.itemAlert && typeof j.itemAlert === 'object') for (const k in itemAlert) { const n = Number(j.itemAlert[k]); if (Number.isFinite(n) && n >= 0) itemAlert[k] = Math.round(n); }
-    shareStats = j.shareStats === true;   // opt-in: só liga se estiver explicitamente true
+    shareStats = resolveShareStatsSetting(j);
   } catch { soundEnabled = true; soundVolume = 0.8; soundPath = null; }
 
   const storedCommunity = readJsonWithBackup(COMMUNITY_FILE);
@@ -648,7 +770,7 @@ function loadSettings() {
   if (created || !validCommunityIdentity(storedCommunity)) saveCommunityState();
   if (created) saveSettings();   // id/token são gerados uma vez e reutilizados nesta instalação
 }
-function saveSettings() { return writeJsonAtomic(SETTINGS_FILE, { soundEnabled, soundVolume, soundPath, itemVis, itemAlert, clientId, shareStats, communityToken, communityRevision, communityLastSuccessAt }); }
+function saveSettings() { return writeJsonAtomic(SETTINGS_FILE, { soundEnabled, soundVolume, soundPath, itemVis, itemAlert, clientId, shareStats, communityPreferenceVersion: COMMUNITY_PREFERENCE_VERSION, communityToken, communityRevision, communityLastSuccessAt }); }
 function pushItemConfig() { if (dashView) send(dashView, 'item-config', { vis: itemVis, alert: itemAlert }); }
 
 // ---- sincronização com o banco comunitário ----
@@ -658,6 +780,7 @@ function communityStatus() {
     enabled: shareStats,
     clientId,
     lastSuccessAt: communityLastSuccessAt || null,
+    nextSyncAt: shareStats && communityNextSyncAt ? communityNextSyncAt : null,
     lastError: communityLastError,
   };
 }
@@ -696,6 +819,7 @@ async function submitCommunityStats() {
     communityRevision = Number.isSafeInteger(savedRevision) && savedRevision >= revision ? savedRevision : revision;
     communityLastSuccessAt = Date.now();
     communityLastError = null;
+    communityClient.clearCache();
     saveCommunityState();
     saveSettings();
     return result;
@@ -709,7 +833,6 @@ async function submitCommunityStats() {
       communityLastError = 'A ordem dos envios foi reconciliada; tentaremos novamente automaticamente.';
       saveCommunityState();
       saveSettings();
-      if (shareStats) setTimeout(() => { submitCommunityStats().catch(() => {}); }, COMMUNITY_CONFLICT_RETRY_MS);
     } else if (!(error && error.code === 'aborted' && !shareStats)) {
       communityLastError = friendlyCommunityError(error);
     }
@@ -718,10 +841,31 @@ async function submitCommunityStats() {
 
   return communitySubmitInFlight;
 }
+function scheduleCommunitySync(delayMs) {
+  if (communityTimer) clearTimeout(communityTimer);
+  const requestedDelay = Math.max(0, Number(delayMs) || 0);
+  const rateLimitDelay = shareStats && communityLastSuccessAt
+    ? Math.max(0, communityLastSuccessAt + COMMUNITY_SEND_INTERVAL_MS - Date.now())
+    : 0;
+  const effectiveDelay = Math.max(requestedDelay, rateLimitDelay);
+  communityNextSyncAt = Date.now() + effectiveDelay;
+  communityTimer = setTimeout(() => {
+    communityTimer = null;
+    communityNextSyncAt = 0;
+    runCommunitySync();
+  }, effectiveDelay);
+}
+function runCommunitySync() {
+  if (communitySyncInFlight) return communitySyncInFlight;
+  communitySyncInFlight = submitCommunityStats().catch(() => null).finally(() => {
+    communitySyncInFlight = null;
+    scheduleCommunitySync(COMMUNITY_SEND_INTERVAL_MS);
+  });
+  return communitySyncInFlight;
+}
 function startCommunitySync() {
-  if (communityTimer) return;
-  communityTimer = setInterval(() => { submitCommunityStats().catch(() => {}); }, COMMUNITY_SEND_INTERVAL_MS);
-  if (shareStats) setTimeout(() => { submitCommunityStats().catch(() => {}); }, 5000);
+  if (communityTimer || communitySyncInFlight) return;
+  scheduleCommunitySync(shareStats ? 5000 : COMMUNITY_SEND_INTERVAL_MS);
 }
 function waitAtMost(promise, timeoutMs) {
   return Promise.race([
@@ -888,61 +1032,89 @@ ipcMain.handle('resetSound', () => { soundPath = null; saveSettings(); pushSound
 function huntStats(g) {
   const s = g._stats || {}, b = g._huntBase;
   if (!b) return null;
-  const sp = s.huntSpecies || null;
+  const speciesList = Array.isArray(s.huntSpeciesList) && s.huntSpeciesList.length
+    ? s.huntSpeciesList
+    : (s.huntSpecies ? [s.huntSpecies] : []);
+  const mixed = speciesList.length > 1;
+  const sp = speciesList.length === 1 ? speciesList[0] : null;
   const d = (k) => (s[k] != null && b[k] != null) ? Math.max(s[k] - b[k], 0) : 0;
   const kills = d('kills'), caught = d('totalCaught'), shinies = d('shinyKills');
   return {
     id: g.hunt || null,
     species: sp,
+    mixed,
+    speciesCount: speciesList.length,
     kills, caught, shinies,
     ms: Date.now() - b.ts,
     catchRate: kills ? Math.round(caught / kills * 1000) / 10 : null,
     shinyRatio: shinies ? Math.round(kills / shinies) : null,
-    ballsSince: (sp && s.ballsSince) ? (s.ballsSince[sp] || 0) : null,   // bolas gastas sem capturar essa espécie
   };
 }
 
-// ---- estatísticas por conta (totais do jogo + taxas desta sessão) ----
-ipcMain.handle('getStats', () => games.map(g => {
-  const s = g._stats || {}, b = g._statBase;
-  const elapsed = b ? Math.max((Date.now() - b.ts) / 3600000, 0) : 0;   // horas desde o baseline
-  const rate = (k) => (b && elapsed > 0.0015 && s[k] != null && b[k] != null) ? Math.round((s[k] - b[k]) / elapsed) : null;  // só depois de ~5s
-  return {
-    slot: g.slot,
-    name: g.charName || ('Tela ' + g.slot),
-    caught: s.totalCaught != null ? s.totalCaught : null,
-    kills: s.kills != null ? s.kills : null,
-    shinies: s.shinyKills != null ? s.shinyKills : null,
-    money: s.money != null ? s.money : null,
-    species: s.species != null ? s.species : null,
-    shinySpecies: s.shinySpecies != null ? s.shinySpecies : null,
-    trainerLevel: s.trainerLevel != null ? s.trainerLevel : null,
-    activeLevel: s.level != null ? s.level : null,
-    catchRate: (s.totalCaught != null && s.kills) ? Math.round(s.totalCaught / s.kills * 1000) / 10 : null,   // % dos encontros que viraram captura
-    hunt: huntStats(g),
-    sessionMs: b ? (Date.now() - b.ts) : 0,
-    perHour: { caught: rate('totalCaught'), kills: rate('kills'), shinies: rate('shinyKills'), money: rate('money') },
-  };
-}));
+// ---- estatísticas por conta: somente diferenças observadas nesta sessão ----
+ipcMain.handle('getStats', () => {
+  const seenCharacters = new Set();
+  return games.filter((g) => {
+    const key = g._charId ? `id:${g._charId}` : `slot:${g.slot}`;
+    if (seenCharacters.has(key)) return false;
+    seenCharacters.add(key);
+    return true;
+  }).map((g) => {
+    const s = g._stats || {}, b = g._statBase;
+    const elapsed = b ? Math.max((Date.now() - b.ts) / 3600000, 0) : 0;   // horas desde o baseline
+    const rate = (k) => (b && elapsed > 0.0015 && s[k] != null && b[k] != null) ? Math.round((s[k] - b[k]) / elapsed) : null;  // só depois de ~5s
+    const delta = (k) => (b && s[k] != null && b[k] != null) ? s[k] - b[k] : 0;
+    const caught = Math.max(delta('totalCaught'), 0), kills = Math.max(delta('kills'), 0), shinies = Math.max(delta('shinyKills'), 0);
+    return {
+      slot: g.slot,
+      name: g.charName || ('Tela ' + g.slot),
+      caught, kills, shinies,
+      money: delta('money'),
+      trainerLevel: s.trainerLevel != null ? s.trainerLevel : null,
+      activeLevel: s.level != null ? s.level : null,
+      catchRate: kills ? Math.round(caught / kills * 1000) / 10 : null,
+      hunt: huntStats(g),
+      sessionMs: b ? (Date.now() - b.ts) : 0,
+      perHour: { caught: rate('totalCaught'), kills: rate('kills'), shinies: rate('shinyKills'), money: rate('money') },
+    };
+  });
+});
 
 // histórico acumulado de uma espécie (ou de todas, se species vier vazio)
-// junta o streak AO VIVO (ballsSinceCapture) que o jogo mantém por conta.
 ipcMain.handle('getHuntLog', async (_e, species) => {
   saveHuntLog();
   if (!species) return huntLog;
   const d = Object.assign({}, huntLog[species] || {});
-  const streaks = [];
+  let huntingNow = 0;
+  let mixedNow = 0;
+  const seenCharacters = new Set();
   for (const g of games) {
+    const characterKey = g._charId ? 'id:' + g._charId : 'slot:' + g.slot;
+    if (seenCharacters.has(characterKey)) continue;
+    seenCharacters.add(characterKey);
     const s = g._stats || {};
-    const n = s.ballsSince ? s.ballsSince[species] : null;
-    if (n != null) streaks.push({ name: g.charName || ('Tela ' + g.slot), balls: n, hunting: s.huntSpecies === species });
+    const activeSpecies = Array.isArray(s.huntSpeciesList) ? s.huntSpeciesList : (s.huntSpecies ? [s.huntSpecies] : []);
+    if (activeSpecies.includes(species)) {
+      if (activeSpecies.length === 1) huntingNow++;
+      else mixedNow++;
+    }
   }
-  d.streaks = streaks;
-  try { d.community = await communityClient.getSpeciesStats(species); } catch { d.community = null; }
-  return (huntLog[species] || streaks.length || d.community) ? d : null;
+  d.huntingNow = huntingNow;
+  d.mixedNow = mixedNow;
+  let communityWaitTimer = null;
+  try {
+    d.community = await Promise.race([
+      communityClient.getSpeciesStats(species),
+      new Promise((_resolve, reject) => {
+        communityWaitTimer = setTimeout(() => reject(new Error('community_hub_timeout')), COMMUNITY_HUB_WAIT_MS);
+      }),
+    ]);
+  } catch { d.community = null; d.communityError = true; }
+  finally { if (communityWaitTimer) clearTimeout(communityWaitTimer); }
+  return (huntLog[species] || huntingNow || mixedNow || d.community || d.communityError) ? d : null;
 });
 
-// ---- compartilhar estatísticas com o banco comunitário (opt-in) ----
+// ---- compartilhar estatísticas com o banco comunitário ----
 ipcMain.handle('getShareStats', () => communityStatus());
 ipcMain.handle('setShareStats', (_e, on) => {
   const previous = shareStats;
@@ -952,9 +1124,28 @@ ipcMain.handle('setShareStats', (_e, on) => {
     shareStats = previous;
     throw new Error('Não foi possível salvar a preferência de compartilhamento.');
   }
-  if (!shareStats) communityClient.abortSubmissions();
-  if (shareStats) setTimeout(() => { submitCommunityStats().catch(() => {}); }, 0);
+  if (!shareStats) {
+    communityClient.abortSubmissions();
+    scheduleCommunitySync(COMMUNITY_SEND_INTERVAL_MS);
+  } else {
+    scheduleCommunitySync(0);
+  }
   return communityStatus();
+});
+ipcMain.handle('forceCommunitySync', async () => {
+  if (app.isPackaged) throw new Error('Envio manual disponível somente no modo de desenvolvimento.');
+  if (!shareStats) throw new Error('Ative o compartilhamento antes de enviar.');
+  if (communityTimer) clearTimeout(communityTimer);
+  communityTimer = null;
+  communityNextSyncAt = 0;
+  try {
+    const result = await submitCommunityStats();
+    scheduleCommunitySync(COMMUNITY_SEND_INTERVAL_MS);
+    return { status: communityStatus(), saved: Number(result && result.saved) || 0 };
+  } catch (error) {
+    scheduleCommunitySync(COMMUNITY_SEND_INTERVAL_MS);
+    throw new Error(friendlyCommunityError(error));
+  }
 });
 
 // ---- visibilidade dos itens na barra + alerta de item baixo ----

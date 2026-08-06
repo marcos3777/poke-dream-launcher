@@ -1,12 +1,12 @@
 {
   "name": "poke-dream-launcher",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "description": "Navegador leve (Electron) para PokeDream — abre ate 4 telas",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "check": "node --check main.js && node --check preload.js",
-    "test": "node --test test/community.test.js",
+    "test": "node --test test/community.test.js test/diagnostics.test.js test/hunt-metrics.test.js test/hunt-hub.test.js",
     "dist": "electron-builder --win nsis --publish never",
     "release": "electron-builder --win nsis --publish always",
     "dist:linux": "electron-builder --linux AppImage --publish never"
@@ -37,6 +37,7 @@
     "files": [
       "main.js",
       "community.js",
+      "hunt-metrics.js",
       "preload.js",
       "app.html",
       "config.html",

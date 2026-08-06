@@ -26,15 +26,19 @@ export default {
 
     const url = new URL(req.url);
     const speciesValues = url.searchParams.getAll("species");
-    const hasUnknownParameter = [...url.searchParams.keys()].some((key) => key !== "species");
+    const formatValues = url.searchParams.getAll("format");
+    const precise = formatValues.length === 1 && formatValues[0] === "precise";
+    const hasUnknownParameter = [...url.searchParams.keys()].some((key) => key !== "species" && key !== "format");
 
     if (speciesValues.length !== 1
+      || formatValues.length > 1
+      || (formatValues.length === 1 && !precise)
       || hasUnknownParameter
       || !SPECIES_PATTERN.test(speciesValues[0])) {
       return jsonResponse({ error: "invalid_request" }, 400);
     }
 
-    const { data, error } = await ctx.supabaseAdmin.rpc("get_species_stats", {
+    const { data, error } = await ctx.supabaseAdmin.rpc(precise ? "get_species_stats_precise" : "get_species_stats", {
       p_species: speciesValues[0],
     });
 
