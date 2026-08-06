@@ -4,3 +4,10 @@ dist/
 
 # logs de build
 *.log
+
+# chaves e segredos — nunca commitar
+.env
+.env.*
+
+# documento de trabalho do backend (contem detalhes de infra)
+SUPABASE-SETUP.md

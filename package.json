@@ -6,6 +6,7 @@
   "scripts": {
     "start": "electron .",
     "check": "node --check main.js && node --check preload.js",
+    "test": "node --test test/community.test.js",
     "dist": "electron-builder --win nsis --publish never",
     "release": "electron-builder --win nsis --publish always",
     "dist:linux": "electron-builder --linux AppImage --publish never"
@@ -35,6 +36,7 @@
     ],
     "files": [
       "main.js",
+      "community.js",
       "preload.js",
       "app.html",
       "config.html",

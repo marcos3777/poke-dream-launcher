@@ -33,6 +33,12 @@
   .cl-body ul{ margin:0; padding-left:16px; }
   .cl-body li{ font-size:11px; color:var(--txt); margin-bottom:3px; line-height:1.35; }
   .cl-empty{ color:var(--mut); font-size:11px; }
+  .share-state{ margin:9px 0; padding:7px 8px; border:1px solid var(--line); border-radius:7px; background:rgba(22,28,42,.72);
+    color:var(--mut); font-size:10.5px; line-height:1.45; }
+  .share-state.ok{ border-color:#2e594e; color:#9cc8b9; }
+  .share-state.warn{ border-color:#665333; color:#d3b77c; }
+  .share-state.off{ color:#788398; }
+  #share-on:disabled{ cursor:not-allowed; }
 </style>
 </head>
 <body>
@@ -40,6 +46,7 @@
   <div class="row">Versao instalada: <b id="ver">—</b></div>
   <button class="btn" id="sound-btn">🔊 Som</button>
   <button class="btn" id="items-btn">🎒 Itens na barra</button>
+  <button class="btn" id="share-btn">📡 Compartilhar estatisticas</button>
   <button class="btn" id="changelog-btn">📋 Novidades (o que mudou)</button>
   <button class="btn" id="check">🔄 Verificar atualizacao</button>
   <button class="btn on" id="install" style="display:none">↻ Reiniciar e instalar</button>
@@ -68,6 +75,27 @@
       <button class="btn" id="snd-pick">📂 Escolher áudio do PC…</button>
       <button class="btn" id="snd-reset">↺ Restaurar som padrão</button>
       <div class="status">Aceita mp3, wav, ogg ou m4a. O som toca quando qualquer uma das suas telas captura um shiny.</div>
+    </div>
+  </div>
+
+  <div class="cl-panel" id="share">
+    <div class="h"><button class="x" id="share-back" title="Voltar" style="margin-left:0;margin-right:8px">←</button><span class="t">📡 Compartilhar estatisticas</span></div>
+    <div class="cl-body">
+      <div class="row" style="margin-bottom:10px">Junta os seus números de caçada com contribuições anônimas da comunidade, para consultar a taxa de captura até de uma espécie que você ainda não caçou.</div>
+      <label class="chk"><input type="checkbox" id="share-on"> Enviar minhas estatisticas de cacada</label>
+      <div class="status">Quando ativado, o launcher envia os números acumulados a cada 15 minutos. Se estiver offline, tenta novamente depois.</div>
+      <div class="status">Contribuições de instalações novas passam por um período de validação antes de entrar na amostra.</div>
+      <div class="share-state" id="share-state" aria-live="polite">Carregando estado do compartilhamento…</div>
+      <div class="status" style="margin-bottom:10px">Desativar interrompe os próximos envios, mas não apaga contribuições que já entraram no agregado comunitário.</div>
+      <div class="status" style="margin-bottom:10px">Ao consultar uma amostra, o servidor recebe a espécie consultada e dados normais da conexão, como o IP, mesmo que o envio esteja desligado.</div>
+      <div class="status" style="margin-bottom:10px">No cadastro de uma contribuição, o IP vira um hash diário para limitar abuso; o banco não guarda o endereço bruto.</div>
+      <div class="sep"></div>
+      <div class="row" style="margin-bottom:4px"><b>O que e enviado</b></div>
+      <div class="status" style="margin-bottom:10px">Por especie: encontros/derrotas, capturas, shinies encontrados/derrotados, bolas jogadas e tempo de cacada.</div>
+      <div class="row" style="margin-bottom:4px"><b>O que nunca e enviado</b></div>
+      <div class="status" style="margin-bottom:10px">Login, senha, nome dos personagens, nome das contas, seus pokemon e seus itens. Nenhum dado das suas contas ou personagens e enviado.</div>
+      <div class="row">Seu ID anonimo: <b id="share-id" style="font-size:10px">—</b></div>
+      <div class="status">Um numero aleatorio criado no seu PC, sem ligacao com suas contas. Serve so pra nao contar os mesmos numeros duas vezes.</div>
     </div>
   </div>
 
@@ -146,6 +174,83 @@
   document.getElementById('snd-test').onclick = function(){ if (P && P.testSound) P.testSound(); };
   document.getElementById('snd-pick').onclick = function(){ if (P && P.pickSoundFile) P.pickSoundFile().then(function(r){ if (r) sndName.textContent = r.name; }); };
   document.getElementById('snd-reset').onclick = function(){ if (P && P.resetSound) P.resetSound().then(function(r){ if (r) sndName.textContent = r.name; }); };
+
+  // ---- compartilhar estatisticas (opt-in) ----
+  const share = document.getElementById('share');
+  const shareOn = document.getElementById('share-on');
+  const shareState = document.getElementById('share-state');
+  const shareId = document.getElementById('share-id');
+  let shareSnapshot = null;
+  function setShareState(text, kind){
+    shareState.textContent = text || '';
+    shareState.className = 'share-state' + (kind ? ' ' + kind : '');
+  }
+  function shareTime(value){
+    if (value == null || value === '') return '';
+    let raw = value;
+    if (typeof raw === 'number' && raw > 0 && raw < 1e12) raw *= 1000;
+    const date = new Date(raw);
+    if (!Number.isFinite(date.getTime())) return '';
+    return date.toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' });
+  }
+  function renderShareState(s){
+    if (!s || typeof s !== 'object') {
+      shareSnapshot = null;
+      shareOn.checked = false;
+      shareOn.disabled = true;
+      shareId.textContent = '—';
+      setShareState('Não foi possível consultar o compartilhamento nesta versão.', 'warn');
+      return;
+    }
+    shareSnapshot = s;
+    const available = s.available !== false;
+    const lastSuccess = shareTime(s.lastSuccessAt);
+    shareOn.checked = !!s.enabled;
+    shareOn.disabled = !available;
+    shareId.textContent = s.clientId || '—';
+    if (!available) {
+      setShareState('Compartilhamento indisponível no momento. Seus dados continuam somente neste computador.', 'off');
+    } else if (s.lastError) {
+      setShareState(String(s.lastError) + (lastSuccess ? ' Último envio bem-sucedido: ' + lastSuccess + '.' : ' O launcher tentará novamente automaticamente.'), 'warn');
+    } else if (lastSuccess) {
+      setShareState('Último envio concluído em ' + lastSuccess + '.', 'ok');
+    } else if (s.enabled) {
+      setShareState('Compartilhamento ativado. Aguardando o primeiro envio.', 'off');
+    } else {
+      setShareState('Compartilhamento desativado. Nenhum novo dado será enviado.', 'off');
+    }
+  }
+  function refreshShareState(){
+    shareOn.disabled = true;
+    setShareState('Carregando estado do compartilhamento…', 'off');
+    if (!P || !P.getShareStats) { renderShareState(null); return Promise.resolve(); }
+    return P.getShareStats().then(function(s){ renderShareState(s); }).catch(function(){
+      shareOn.disabled = !shareSnapshot || shareSnapshot.available === false;
+      setShareState('Não foi possível consultar o último envio agora. Tente novamente mais tarde.', 'warn');
+    });
+  }
+  document.getElementById('share-btn').onclick = function(){
+    share.classList.add('show');
+    refreshShareState();
+  };
+  document.getElementById('share-back').onclick = function(){ share.classList.remove('show'); };
+  shareOn.onchange = function(){
+    const requested = shareOn.checked;
+    const previous = shareSnapshot ? !!shareSnapshot.enabled : !requested;
+    if (!P || !P.setShareStats) { shareOn.checked = previous; renderShareState(null); return; }
+    shareOn.disabled = true;
+    setShareState('Salvando sua preferência…', 'off');
+    P.setShareStats(requested).then(function(result){
+      if (result && typeof result === 'object') { renderShareState(result); return; }
+      shareSnapshot = Object.assign({}, shareSnapshot || {}, { enabled:requested });
+      shareOn.checked = requested;
+      return refreshShareState();
+    }).catch(function(){
+      shareOn.checked = previous;
+      shareOn.disabled = !shareSnapshot || shareSnapshot.available === false;
+      setShareState('Não foi possível salvar sua preferência agora. Tente novamente.', 'warn');
+    });
+  };
 
   // ---- itens na barra (mostrar/esconder cada um) ----
   const items = document.getElementById('items');

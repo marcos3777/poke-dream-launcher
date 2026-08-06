@@ -192,7 +192,24 @@
   .hl-ball .bn small{ display:block; font-size:9px; color:var(--mut); font-weight:400; }
   .hl-ball .bp{ font-size:14px; font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums; }
   .hl-ball.off .bp{ color:var(--line2); }
+  .hl-ball.cmp{ display:block; padding:9px 10px 8px; }
+  .hl-ball-head{ display:flex; align-items:center; gap:9px; margin-bottom:6px; }
+  .hl-ball-head .bn{ flex:1 1 auto; }
+  .hl-cmp-r{ display:grid; grid-template-columns:72px 1fr auto; align-items:baseline; gap:7px; padding:4px 1px 3px 29px;
+    border-top:1px solid rgba(31,39,52,.72); font-size:10px; }
+  .hl-cmp-r .who{ color:var(--txt); font-weight:700; }
+  .hl-cmp-r .sample{ min-width:0; color:var(--mut); font-size:9px; line-height:1.35; }
+  .hl-cmp-r .pct{ color:var(--gold); font-size:12px; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .hl-cmp-r.community .who, .hl-cmp-r.community .pct{ color:#aeb8ca; }
+  .hl-community{ margin:0 0 12px; padding:9px 10px; border:1px solid rgba(58,72,94,.72); border-radius:10px; background:rgba(13,17,25,.58); }
+  .hl-community .hc-top{ display:flex; align-items:baseline; gap:8px; margin-bottom:4px; }
+  .hl-community .hc-top b{ color:#b8c2d3; font-size:10.5px; }
+  .hl-community .hc-top span{ margin-left:auto; color:#6f7b91; font-size:9px; }
+  .hl-community .hc-main{ color:var(--txt); font-size:10.5px; line-height:1.5; }
+  .hl-community .hc-main strong{ color:#c5cddd; font-size:12px; }
+  .hl-community .hc-sub{ color:var(--mut); font-size:9.5px; line-height:1.45; }
   .hl-empty{ color:var(--mut); font-size:11.5px; line-height:1.6; padding:6px 2px 2px; }
+  .hl-empty.local{ margin-bottom:11px; padding:8px 10px; border:1px dashed rgba(58,72,94,.65); border-radius:9px; background:rgba(13,17,25,.35); }
   /* linhas técnicas: rótulo à esquerda, número à direita */
   .hl-rows{ margin-bottom:12px; }
   .hl-r{ display:flex; align-items:baseline; gap:8px; font-size:11px; padding:3px 2px; border-bottom:1px solid rgba(31,39,52,.6); }
@@ -482,63 +499,101 @@
   let hlBack = null;
   function closeHuntLog(){ if (hlBack){ hlBack.remove(); hlBack = null; document.removeEventListener('keydown', hlEsc); } }
   function hlEsc(e){ if (e.key === 'Escape') closeHuntLog(); }
-  function pctTxt(num, den){ return den ? (Math.round(num / den * 1000) / 10) + '%' : '—'; }
+  function numVal(v){ const n = Number(v); return Number.isFinite(n) ? n : 0; }
+  function pctTxt(num, den){
+    const d = numVal(den);
+    if (!d) return '—';
+    return (Math.round(numVal(num) / d * 1000) / 10).toLocaleString('pt-BR', { minimumFractionDigits:1, maximumFractionDigits:1 }) + '%';
+  }
+  function pctValue(value, num, den){
+    let p = (value !== null && value !== undefined && value !== '') ? Number(value) : NaN;
+    if (!Number.isFinite(p)) { const d = numVal(den); p = d ? numVal(num) / d * 100 : NaN; }
+    return Number.isFinite(p) ? p.toLocaleString('pt-BR', { maximumFractionDigits:2 }) + '%' : '—';
+  }
+  function contributorsTxt(n){ const v = Math.max(0, Math.round(numVal(n))); return fmtInt(v) + ' colaborador' + (v === 1 ? '' : 'es'); }
   function hlTile(k, n, cls){ return '<div class="st-t'+(cls?' '+cls:'')+'"><div class="k">'+k+'</div><div class="n">'+n+'</div></div>'; }
-  function huntLogHTML(sp, d){
+  function huntLogHTML(sp, d, loadError){
+    d = d || {};
+    const community = d.community && typeof d.community === 'object' ? d.community : null;
+    const local = {
+      ms:numVal(d.ms), kills:numVal(d.kills), caught:numVal(d.caught), shinies:numVal(d.shinies),
+      thrownA:numVal(d.thrownA), thrownB:numVal(d.thrownB), caughtA:numVal(d.caughtA), caughtB:numVal(d.caughtB),
+      dryBalls:numVal(d.dryBalls)
+    };
+    const cm = community ? {
+      contributors:numVal(community.contributors), kills:numVal(community.kills), caught:numVal(community.caught),
+      shinies:numVal(community.shinies), thrownA:numVal(community.thrown_a), thrownB:numVal(community.thrown_b),
+      caughtA:numVal(community.caught_a), caughtB:numVal(community.caught_b), ms:numVal(community.ms),
+      catchPct:community.catch_pct, catchPctA:community.catch_pct_a, catchPctB:community.catch_pct_b,
+      killsPerShiny:numVal(community.kills_per_shiny)
+    } : null;
+    const hasLocal = Object.keys(local).some(function(k){ return local[k] > 0; });
+    const hasCommunity = !!(cm && (cm.contributors || cm.kills || cm.caught || cm.thrownA || cm.thrownB));
     const spr = sprStatic(sp, false);
     const head = '<div class="hl-h">'
       + (spr ? '<img src="'+spr+'" alt="" onerror="this.style.display=\'none\'">' : '')
-      + '<div class="t"><div class="sp">'+esc(sp)+'</div><div class="su">histórico acumulado</div></div>'
+      + '<div class="t"><div class="sp">'+esc(sp)+'</div><div class="su">'+(hasCommunity ? 'seus números e comunidade' : 'histórico acumulado')+'</div></div>'
       + '<button class="x" id="hl-x" title="Fechar">✕</button></div>';
-    if (!d || (!d.kills && !d.caught)) {
+    if (loadError) return head + '<div class="hl-empty">Não foi possível carregar as estatísticas agora. Confira sua conexão e tente novamente em instantes.</div>';
+    if (!hasLocal && !hasCommunity) {
       // sem histórico ainda — mas o streak vem do jogo e já vale mostrar
-      const st0 = (d && d.streaks || []).filter(function(x){ return x && x.balls != null; });
+      const st0 = (d.streaks || []).filter(function(x){ return x && x.balls != null; });
       const row0 = (lb, vl, cls) => '<div class="hl-r"><span class="lb">'+lb+'</span><span class="vl'+(cls?' '+cls:'')+'">'+vl+'</span></div>';
       return head + '<div class="hl-empty">Ainda não há histórico para <b>'+esc(sp)+'</b>.<br>Assim que você caçar essa espécie com o launcher aberto, os números aparecem aqui e vão se acumulando.</div>'
         + (st0.length ? '<div class="hl-sec" style="margin-top:12px">Streak atual — bolas sem capturar</div><div class="hl-rows">'
             + st0.map(function(x){ return row0(esc(x.name) + (x.hunting ? ' <span class="un">· caçando agora</span>' : ''), fmtInt(x.balls), x.balls ? 'g' : 'dim'); }).join('')
           + '</div>' : '');
     }
-    const thrown = (d.thrownA || 0) + (d.thrownB || 0);
-    const tiles = '<div class="hl-tiles">'
-      + hlTile('Tempo caçando', fmtDur(d.ms))
-      + hlTile('Encontros', fmtInt(d.kills))
-      + hlTile('Capturas', fmtInt(d.caught) + ' <span style="font-size:10px;color:var(--mut)">('+pctTxt(d.caught, d.kills)+')</span>')
-      + hlTile('Shinies', fmtInt(d.shinies), 'shiny gold')
-      + '</div>';
+    const thrown = local.thrownA + local.thrownB;
+    const localIntro = hasLocal ? '' : '<div class="hl-empty local">Você ainda não tem histórico local desta espécie. A amostra comunitária já pode ser consultada abaixo.</div>';
+    const tiles = hasLocal ? '<div class="hl-tiles">'
+      + hlTile('Tempo caçando', fmtDur(local.ms))
+      + hlTile('Encontros', fmtInt(local.kills))
+      + hlTile('Capturas', fmtInt(local.caught) + ' <span style="font-size:10px;color:var(--mut)">('+pctTxt(local.caught, local.kills)+')</span>')
+      + hlTile('Shinies', fmtInt(local.shinies), 'shiny gold')
+      + '</div>' : '';
+
+    const communitySummary = hasCommunity ? '<div class="hl-community">'
+      + '<div class="hc-top"><b>Amostra da comunidade</b><span>'+contributorsTxt(cm.contributors)+'</span></div>'
+      + '<div class="hc-main"><strong>'+fmtInt(Math.round(cm.kills))+'</strong> encontros · <strong>'+fmtInt(Math.round(cm.caught))+'</strong> capturas <span class="un">('+pctValue(cm.catchPct, cm.caught, cm.kills)+')</span></div>'
+      + '<div class="hc-sub">'+fmtInt(Math.round(cm.shinies))+' shinies encontrados/derrotados'
+        + (cm.killsPerShiny ? ' · 1 a cada '+fmtInt(Math.round(cm.killsPerShiny))+' encontros' : '')
+        + ' · '+fmtDur(cm.ms)+' de caçada somada</div>'
+      + '</div>' : '';
 
     // "1 a cada N" — se ainda não houve o evento, mostra o que já se gastou sem ele
     const row = (lb, vl, cls) => '<div class="hl-r"><span class="lb">'+lb+'</span><span class="vl'+(cls?' '+cls:'')+'">'+vl+'</span></div>';
     const ratio = (tot, ev, un) => ev ? '1 <span class="un">a cada</span> ' + fmtInt(Math.round(tot / ev)) + ' <span class="un">'+un+'</span>' : '—';
-    const props = '<div class="hl-sec">Proporções</div><div class="hl-rows">'
-      + row('Captura', ratio(d.kills, d.caught, 'encontros'), 'g')
-      + row('Shiny', ratio(d.kills, d.shinies, 'encontros'), 'g')
-      + row('Sem shiny há', fmtInt(d.dryBalls || 0) + ' <span class="un">bolas</span>', (d.dryBalls || 0) ? 'g' : 'dim')
-      + row('Bolas por captura', d.caught ? (Math.round(thrown / d.caught * 10) / 10).toLocaleString('pt-BR') : '—')
-      + row('Bolas por encontro', d.kills ? (Math.round(thrown / d.kills * 100) / 100).toLocaleString('pt-BR') : '—')
+    const props = hasLocal ? '<div class="hl-sec">Proporções</div><div class="hl-rows">'
+      + row('Captura', ratio(local.kills, local.caught, 'encontros'), 'g')
+      + row('Shiny', ratio(local.kills, local.shinies, 'encontros'), 'g')
+      + row('Sem shiny há', fmtInt(local.dryBalls) + ' <span class="un">bolas</span>', local.dryBalls ? 'g' : 'dim')
+      + row('Bolas por captura', local.caught ? (Math.round(thrown / local.caught * 10) / 10).toLocaleString('pt-BR') : '—')
+      + row('Bolas por encontro', local.kills ? (Math.round(thrown / local.kills * 100) / 100).toLocaleString('pt-BR') : '—')
       + row('Total de bolas jogadas', fmtInt(thrown))
-      + (!d.shinies && thrown ? row('Bolas jogadas sem nenhum shiny', fmtInt(thrown), 'dim') : '')
-      + '</div>';
+      + (!local.shinies && thrown ? row('Bolas jogadas sem nenhum shiny', fmtInt(thrown), 'dim') : '')
+      + '</div>' : '';
 
-    const perH = (n) => d.ms > 0 ? fmtInt(Math.round(n / (d.ms / 3600000))) + ' <span class="un">/h</span>' : '—';
-    const rates = '<div class="hl-sec">Por hora de caçada</div><div class="hl-rows">'
-      + row('Encontros', perH(d.kills))
-      + row('Capturas', perH(d.caught))
-      + row('Shinies', d.shinies ? perH(d.shinies) : '<span class="dim">0 <span class="un">/h</span></span>', 'g')
+    const perH = (n) => local.ms > 0 ? fmtInt(Math.round(n / (local.ms / 3600000))) + ' <span class="un">/h</span>' : '—';
+    const rates = hasLocal ? '<div class="hl-sec">Por hora de caçada</div><div class="hl-rows">'
+      + row('Encontros', perH(local.kills))
+      + row('Capturas', perH(local.caught))
+      + row('Shinies', local.shinies ? perH(local.shinies) : '<span class="dim">0 <span class="un">/h</span></span>', 'g')
       + row('Bolas gastas', perH(thrown))
-      + '</div>';
+      + '</div>' : '';
 
-    const ball = (nome, sprite, th, ct, nota) => {
-      const on = th > 0;
-      return '<div class="hl-ball'+(on?'':' off')+'">'
-        + '<img src="'+sprItem(sprite)+'" alt="" onerror="this.style.display=\'none\'">'
-        + '<span class="bn">'+nome+'<small>'+(on ? fmtInt(Math.round(ct))+' capturas em '+fmtInt(th)+' bolas' : 'nenhuma bola usada')+(nota?' · '+nota:'')+'</small></span>'
-        + '<span class="bp">'+(on ? pctTxt(ct, th) : '—')+'</span>'
+    const ball = (nome, sprite, localThrown, localCaught, communityThrown, communityCaught, communityPct, nota) => {
+      const localOn = localThrown > 0, communityOn = hasCommunity && communityThrown > 0;
+      return '<div class="hl-ball cmp'+(localOn || communityOn ? '' : ' off')+'">'
+        + '<div class="hl-ball-head"><img src="'+sprItem(sprite)+'" alt="" onerror="this.style.display=\'none\'">'
+        + '<span class="bn">'+nome+(nota ? '<small>'+nota+'</small>' : '')+'</span></div>'
+        + '<div class="hl-cmp-r"><span class="who">Você</span><span class="sample">'+(localOn ? fmtInt(Math.round(localCaught))+' capturas em '+fmtInt(localThrown)+' bolas' : 'sem dados locais')+'</span><span class="pct">'+(localOn ? pctTxt(localCaught, localThrown) : '—')+'</span></div>'
+        + (hasCommunity ? '<div class="hl-cmp-r community"><span class="who">Comunidade</span><span class="sample">'+(communityOn ? fmtInt(Math.round(communityCaught))+' capturas em '+fmtInt(communityThrown)+' bolas · '+contributorsTxt(cm.contributors) : 'sem amostra para esta bola')+'</span><span class="pct">'+(communityOn ? pctValue(communityPct, communityCaught, communityThrown) : '—')+'</span></div>' : '')
       + '</div>';
     };
     const balls = '<div class="hl-sec">Taxa de captura por bola</div>'
-      + ball('Poke Ball', 'poke-ball', d.thrownA || 0, d.caughtA || 0, '')
-      + ball('Ultra / Premier', 'ultra-ball', d.thrownB || 0, d.caughtB || 0, 'mesma chance');
+      + ball('Poke Ball', 'poke-ball', local.thrownA, local.caughtA, cm ? cm.thrownA : 0, cm ? cm.caughtA : 0, cm ? cm.catchPctA : null, '')
+      + ball('Ultra / Premier', 'ultra-ball', local.thrownB, local.caughtB, cm ? cm.thrownB : 0, cm ? cm.caughtB : 0, cm ? cm.catchPctB : null, 'mesma chance');
 
     // streak: vem ao vivo do jogo (bolas gastas desde a última captura dessa espécie)
     const st = (d.streaks || []).filter(function(x){ return x && x.balls != null; });
@@ -546,8 +601,8 @@
       + st.map(function(x){ return row(esc(x.name) + (x.hunting ? ' <span class="un">· caçando agora</span>' : ''), fmtInt(x.balls), x.balls ? 'g' : 'dim'); }).join('')
       + '</div>' : '';
 
-    return head + tiles + props + rates + balls + streak
-      + '<div class="hl-note">Bolas contadas pela queda na mochila; aumento é drop, não conta. Ultra e Premier somam por terem a mesma chance.</div>';
+    return head + localIntro + tiles + communitySummary + props + rates + balls + streak
+      + '<div class="hl-note">Bolas locais são contadas pela queda na mochila; aumento é drop, não conta. Ultra e Premier somam por terem a mesma chance. A comunidade mostra somente dados agregados de colaboradores anônimos.</div>';
   }
   function openHuntLog(sp){
     if (!sp) return;
@@ -558,13 +613,13 @@
     document.body.appendChild(hlBack);
     hlBack.addEventListener('click', function(e){ if (e.target === hlBack) closeHuntLog(); });
     document.addEventListener('keydown', hlEsc);
-    const fill = function(d){
+    const fill = function(d, loadError){
       if (!hlBack) return;
-      hlBack.querySelector('.hl-modal').innerHTML = huntLogHTML(sp, d);
+      hlBack.querySelector('.hl-modal').innerHTML = huntLogHTML(sp, d, loadError);
       const x = hlBack.querySelector('#hl-x'); if (x) x.onclick = closeHuntLog;
     };
-    if (P && P.getHuntLog) P.getHuntLog(sp).then(fill).catch(function(){ fill(null); });
-    else fill(null);
+    if (P && P.getHuntLog) P.getHuntLog(sp).then(function(d){ fill(d, false); }).catch(function(){ fill(null, true); });
+    else fill(null, true);
   }
   // liga os "+" (delegação: funciona pra Box, Pokédex e Stats sem religar a cada render)
   document.addEventListener('click', function(e){

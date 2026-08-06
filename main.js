@@ -6,6 +6,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const zlib = require('zlib');
 const { autoUpdater } = require('electron-updater');
+const { createCommunityClient } = require('./community');
 
 const GAME_URL = 'https://pokedream.com.br/';
 const GAME_DOMAIN = 'pokedream.com.br';
@@ -13,6 +14,9 @@ const MAXV = 4;
 const BAR = 46;
 const SIDE_W = 220;
 const GAP = 3;
+const COMMUNITY_SEND_INTERVAL_MS = 15 * 60 * 1000;
+const COMMUNITY_QUIT_TIMEOUT_MS = 3000;
+const COMMUNITY_CONFLICT_RETRY_MS = 5 * 60 * 1000 + 1000;
 
 // userData persistente (nao some ao fechar)
 app.setPath('userData', path.join(app.getPath('appData'), 'poke-dream-launcher'));
@@ -31,12 +35,26 @@ let diagOn = false;      // modo diagnóstico: grava frames WS + respostas REST 
 let DUMP_FILE = null;
 let SESSION_FILE = null;   // guarda quantas telas estavam abertas, pra reabrir na próxima vez
 let SETTINGS_FILE = null;  // preferências (som)
+let COMMUNITY_FILE = null; // identidade/revisão comunitária, redundante às preferências
 let HUNTLOG_FILE = null;   // histórico acumulado de caçada por espécie
 let soundEnabled = true;   // tocar som ao capturar shiny
 let soundVolume = 0.8;     // 0..1
 let soundPath = null;      // caminho de um áudio do PC do usuário; null = som padrão embutido
 let itemVis = { poke_ball: true, ultra_ball: true, premier_ball: true, potion: true, revive: true };  // quais itens aparecem na barra
 let itemAlert = { poke_ball: 2000, ultra_ball: 2000, premier_ball: 2000, potion: 2000, revive: 500 };  // limite p/ borda vermelha (0 = sem alerta)
+let clientId = null;        // id anônimo e aleatório; só serve pra deduplicar o envio ao banco comunitário
+let shareStats = false;     // opt-in do envio (desligado por padrão)
+let communityToken = null;  // segredo aleatório desta instalação; nunca é exposto à interface
+let communityRevision = 0;  // ordem monotônica dos snapshots (evita um envio antigo sobrescrever o novo)
+let communityLastSuccessAt = 0;
+let communityLastError = null;
+let communitySubmitInFlight = null;
+let communityTimer = null;
+let huntLogSaveTimer = null;
+let persistentStateLoaded = false;
+let communityQuitPending = false;
+let communityQuitFlushed = false;
+const communityClient = createCommunityClient();
 let diagLines = 0;
 
 // ---- diagnóstico: captura de rede (só grava quando diagOn) ----
@@ -152,6 +170,7 @@ function accumulateHuntLog(g, prog, s) {
   const now = Date.now();
   // a bag só vem no /save quando muda; sem isso a leitura viraria null e o delta seguinte se perdia
   const bag = prog.bag || g._bag;
+  // shinyKills conta shinies encontrados/derrotados; capturas continuam separadas em totalCaught.
   const cur = { ts: now, species: sp, kills: s.kills, caught: s.totalCaught, shinies: s.shinyKills,
                 ballA: bag ? sumBalls(bag, BALL_A) : null, ballB: bag ? sumBalls(bag, BALL_B) : null };
   g._accPrev = cur;
@@ -159,7 +178,8 @@ function accumulateHuntLog(g, prog, s) {
 
   const e = huntEntry(sp);
   const gap = now - prev.ts;
-  if (gap > 0 && gap < MAX_GAP_MS) e.ms += gap;
+  const timeAdvanced = gap > 0 && gap < MAX_GAP_MS;
+  if (timeAdvanced) e.ms += gap;
 
   const dKills = (cur.kills != null && prev.kills != null) ? Math.max(cur.kills - prev.kills, 0) : 0;
   const dCaught = (cur.caught != null && prev.caught != null) ? Math.max(cur.caught - prev.caught, 0) : 0;
@@ -183,20 +203,19 @@ function accumulateHuntLog(g, prog, s) {
     else if (!tB) e.caughtA += p;
     else { const a = p * tA / (tA + tB); e.caughtA += a; e.caughtB += p - a; }
   }
-  if (dKills || dCaught || dShiny || tA || tB) { e.updated = now; huntLogDirty = true; }
+  if (dKills || dCaught || dShiny || tA || tB) e.updated = now;
+  if (timeAdvanced || dKills || dCaught || dShiny || tA || tB) huntLogDirty = true;
 }
 // v2: antes da correção a contagem de bolas perdia deltas (a bag só vem no /save quando muda),
 // então o histórico ficava subestimado. Versão diferente = começa limpo.
 const HUNTLOG_V = 2;
 function loadHuntLog() {
-  try {
-    const j = JSON.parse(fs.readFileSync(HUNTLOG_FILE, 'utf8'));
-    huntLog = (j && j.v === HUNTLOG_V && j.data && typeof j.data === 'object') ? j.data : {};
-  } catch { huntLog = {}; }
+  const j = readJsonWithBackup(HUNTLOG_FILE);
+  huntLog = (j && j.v === HUNTLOG_V && j.data && typeof j.data === 'object') ? j.data : {};
 }
 function saveHuntLog() {
   if (!huntLogDirty || !HUNTLOG_FILE) return;
-  try { fs.writeFileSync(HUNTLOG_FILE, JSON.stringify({ v: HUNTLOG_V, data: huntLog })); huntLogDirty = false; } catch {}
+  if (writeJsonAtomic(HUNTLOG_FILE, { v: HUNTLOG_V, data: huntLog })) huntLogDirty = false;
 }
 function applyState(g, state) {   // estado COMPLETO (/offline ou /save cheio): guarda o box e o ativo
   if (!state) return false;
@@ -566,18 +585,159 @@ function loadSessionCount() {
 }
 
 // ---- preferências (som) ----
-function loadSettings() {
+function readJsonWithBackup(file) {
+  if (!file) return null;
+  for (const candidate of [file, file + '.bak']) {
+    try { return JSON.parse(fs.readFileSync(candidate, 'utf8')); } catch {}
+  }
+  return null;
+}
+function writeJsonAtomic(file, value) {
+  if (!file) return false;
+  const temp = file + '.tmp';
+  const backup = file + '.bak';
   try {
-    const j = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+    fs.writeFileSync(temp, JSON.stringify(value), { encoding: 'utf8', mode: 0o600 });
+    try {
+      JSON.parse(fs.readFileSync(file, 'utf8'));
+      fs.copyFileSync(file, backup);
+    } catch {}
+    fs.renameSync(temp, file);
+    return true;
+  } catch {
+    try { if (fs.existsSync(temp)) fs.unlinkSync(temp); } catch {}
+    return false;
+  }
+}
+function validCommunityIdentity(value) {
+  return !!value
+    && typeof value.clientId === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.clientId)
+    && typeof value.communityToken === 'string'
+    && /^[A-Za-z0-9_-]{43}$/.test(value.communityToken);
+}
+function saveCommunityState() {
+  return writeJsonAtomic(COMMUNITY_FILE, { clientId, communityToken, communityRevision, communityLastSuccessAt });
+}
+function loadSettings() {
+  const j = readJsonWithBackup(SETTINGS_FILE) || {};
+  try {
     soundEnabled = j.soundEnabled !== false;
     if (typeof j.soundVolume === 'number') soundVolume = Math.max(0, Math.min(1, j.soundVolume));
     soundPath = (typeof j.soundPath === 'string' && j.soundPath) ? j.soundPath : null;
     if (j.itemVis && typeof j.itemVis === 'object') for (const k in itemVis) itemVis[k] = j.itemVis[k] !== false;
     if (j.itemAlert && typeof j.itemAlert === 'object') for (const k in itemAlert) { const n = Number(j.itemAlert[k]); if (Number.isFinite(n) && n >= 0) itemAlert[k] = Math.round(n); }
+    shareStats = j.shareStats === true;   // opt-in: só liga se estiver explicitamente true
   } catch { soundEnabled = true; soundVolume = 0.8; soundPath = null; }
+
+  const storedCommunity = readJsonWithBackup(COMMUNITY_FILE);
+  const identity = validCommunityIdentity(storedCommunity) ? storedCommunity : (validCommunityIdentity(j) ? j : null);
+  if (identity) {
+    clientId = identity.clientId;
+    communityToken = identity.communityToken;
+    const copies = [storedCommunity, j].filter((value) => validCommunityIdentity(value)
+      && value.clientId === clientId && value.communityToken === communityToken);
+    for (const copy of copies) {
+      if (Number.isSafeInteger(copy.communityRevision) && copy.communityRevision >= 0) communityRevision = Math.max(communityRevision, copy.communityRevision);
+      if (Number.isFinite(copy.communityLastSuccessAt) && copy.communityLastSuccessAt > 0) communityLastSuccessAt = Math.max(communityLastSuccessAt, copy.communityLastSuccessAt);
+    }
+  }
+  let created = false;
+  if (!clientId) { clientId = crypto.randomUUID(); created = true; }
+  if (!communityToken) { communityToken = crypto.randomBytes(32).toString('base64url'); created = true; }
+  if (created || !validCommunityIdentity(storedCommunity)) saveCommunityState();
+  if (created) saveSettings();   // id/token são gerados uma vez e reutilizados nesta instalação
 }
-function saveSettings() { try { if (SETTINGS_FILE) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ soundEnabled, soundVolume, soundPath, itemVis, itemAlert })); } catch {} }
+function saveSettings() { return writeJsonAtomic(SETTINGS_FILE, { soundEnabled, soundVolume, soundPath, itemVis, itemAlert, clientId, shareStats, communityToken, communityRevision, communityLastSuccessAt }); }
 function pushItemConfig() { if (dashView) send(dashView, 'item-config', { vis: itemVis, alert: itemAlert }); }
+
+// ---- sincronização com o banco comunitário ----
+function communityStatus() {
+  return {
+    available: true,
+    enabled: shareStats,
+    clientId,
+    lastSuccessAt: communityLastSuccessAt || null,
+    lastError: communityLastError,
+  };
+}
+function friendlyCommunityError(error) {
+  const status = Number(error && error.status);
+  if (error && error.code === 'local_persistence') return 'Não foi possível salvar o histórico local; o envio foi cancelado para não perder números.';
+  if (error && error.code === 'invalid_local_snapshot') {
+    const species = error.species ? ' de ' + error.species : '';
+    return 'Os dados locais' + species + ' estão inconsistentes; nada foi alterado no servidor.';
+  }
+  if (status === 401 || status === 403) return 'O servidor recusou a conexão. Tentaremos novamente após uma atualização.';
+  if (status === 429) return 'Envio recente demais; os dados serão enviados na próxima janela.';
+  return 'Sem conexão com a comunidade no momento; tentaremos novamente automaticamente.';
+}
+async function submitCommunityStats() {
+  if (!shareStats || !persistentStateLoaded) return { skipped: true };
+  if (communitySubmitInFlight) return communitySubmitInFlight;
+
+  saveHuntLog();
+  if (huntLogDirty) {
+    const error = new Error('local hunt history was not persisted');
+    error.code = 'local_persistence';
+    communityLastError = friendlyCommunityError(error);
+    throw error;
+  }
+
+  const revision = communityRevision + 1;
+  communitySubmitInFlight = communityClient.submitStats({
+    appVersion: app.getVersion(),
+    clientId,
+    clientToken: communityToken,
+    revision,
+    huntLog,
+  }).then((result) => {
+    const savedRevision = Number(result && result.revision);
+    communityRevision = Number.isSafeInteger(savedRevision) && savedRevision >= revision ? savedRevision : revision;
+    communityLastSuccessAt = Date.now();
+    communityLastError = null;
+    saveCommunityState();
+    saveSettings();
+    return result;
+  }).catch((error) => {
+    const serverRevision = Number(error && error.data && error.data.revision);
+    const revisionConflict = Number(error && error.status) === 409
+      && (error.code === 'stale_revision' || error.code === 'revision_conflict')
+      && Number.isSafeInteger(serverRevision) && serverRevision >= 0;
+    if (revisionConflict) {
+      communityRevision = Math.max(communityRevision, serverRevision);
+      communityLastError = 'A ordem dos envios foi reconciliada; tentaremos novamente automaticamente.';
+      saveCommunityState();
+      saveSettings();
+      if (shareStats) setTimeout(() => { submitCommunityStats().catch(() => {}); }, COMMUNITY_CONFLICT_RETRY_MS);
+    } else if (!(error && error.code === 'aborted' && !shareStats)) {
+      communityLastError = friendlyCommunityError(error);
+    }
+    throw error;
+  }).finally(() => { communitySubmitInFlight = null; });
+
+  return communitySubmitInFlight;
+}
+function startCommunitySync() {
+  if (communityTimer) return;
+  communityTimer = setInterval(() => { submitCommunityStats().catch(() => {}); }, COMMUNITY_SEND_INTERVAL_MS);
+  if (shareStats) setTimeout(() => { submitCommunityStats().catch(() => {}); }, 5000);
+}
+function waitAtMost(promise, timeoutMs) {
+  return Promise.race([
+    Promise.resolve(promise).catch(() => null),
+    new Promise((resolve) => setTimeout(resolve, timeoutMs)),
+  ]);
+}
+function flushCommunityBeforeQuit() {
+  saveHuntLog();
+  return shareStats ? waitAtMost(submitCommunityStats(), COMMUNITY_QUIT_TIMEOUT_MS) : Promise.resolve();
+}
+async function quitAndInstallSafely() {
+  try { await flushCommunityBeforeQuit(); } catch {}
+  communityQuitFlushed = true;
+  try { autoUpdater.quitAndInstall(); } catch (e) { console.error('[updater] quitAndInstall', e && e.message); }
+}
 
 // ---- som (shiny capturado) ----
 const DEFAULT_SOUND = path.join(__dirname, 'sounds', 'shiny-default.mp3');
@@ -596,13 +756,18 @@ function pushSoundConfig() { if (dashView) send(dashView, 'sound-config', { enab
 function createWindow() {
   storageDir = path.join(app.getPath('userData'), 'storage');
   fs.mkdirSync(storageDir, { recursive: true });
-  DUMP_FILE = path.join(app.getPath('userData'), 'ws-dump.jsonl');
-  SESSION_FILE = path.join(app.getPath('userData'), 'session.json');
-  SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
-  HUNTLOG_FILE = path.join(app.getPath('userData'), 'huntlog.json');
-  loadSettings();
-  loadHuntLog();
-  setInterval(saveHuntLog, 30000);   // grava o histórico de tempos em tempos (só se mudou)
+  if (!persistentStateLoaded) {
+    DUMP_FILE = path.join(app.getPath('userData'), 'ws-dump.jsonl');
+    SESSION_FILE = path.join(app.getPath('userData'), 'session.json');
+    SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
+    COMMUNITY_FILE = path.join(app.getPath('userData'), 'community.json');
+    HUNTLOG_FILE = path.join(app.getPath('userData'), 'huntlog.json');
+    loadSettings();
+    loadHuntLog();
+    persistentStateLoaded = true;
+    huntLogSaveTimer = setInterval(saveHuntLog, 30000);   // um só timer, mesmo se a janela for recriada
+    startCommunitySync();
+  }
 
   win = new BaseWindow({
     width: 1400, height: 860,
@@ -762,10 +927,10 @@ ipcMain.handle('getStats', () => games.map(g => {
 
 // histórico acumulado de uma espécie (ou de todas, se species vier vazio)
 // junta o streak AO VIVO (ballsSinceCapture) que o jogo mantém por conta.
-ipcMain.handle('getHuntLog', (_e, species) => {
+ipcMain.handle('getHuntLog', async (_e, species) => {
   saveHuntLog();
   if (!species) return huntLog;
-  const d = Object.assign({}, huntLog[species] || null);
+  const d = Object.assign({}, huntLog[species] || {});
   const streaks = [];
   for (const g of games) {
     const s = g._stats || {};
@@ -773,7 +938,23 @@ ipcMain.handle('getHuntLog', (_e, species) => {
     if (n != null) streaks.push({ name: g.charName || ('Tela ' + g.slot), balls: n, hunting: s.huntSpecies === species });
   }
   d.streaks = streaks;
-  return (huntLog[species] || streaks.length) ? d : null;
+  try { d.community = await communityClient.getSpeciesStats(species); } catch { d.community = null; }
+  return (huntLog[species] || streaks.length || d.community) ? d : null;
+});
+
+// ---- compartilhar estatísticas com o banco comunitário (opt-in) ----
+ipcMain.handle('getShareStats', () => communityStatus());
+ipcMain.handle('setShareStats', (_e, on) => {
+  const previous = shareStats;
+  shareStats = !!on;
+  communityLastError = null;
+  if (!saveSettings()) {
+    shareStats = previous;
+    throw new Error('Não foi possível salvar a preferência de compartilhamento.');
+  }
+  if (!shareStats) communityClient.abortSubmissions();
+  if (shareStats) setTimeout(() => { submitCommunityStats().catch(() => {}); }, 0);
+  return communityStatus();
 });
 
 // ---- visibilidade dos itens na barra + alerta de item baixo ----
@@ -789,7 +970,7 @@ ipcMain.handle('checkForUpdate', () => {
   if (!app.isPackaged) { sendUpdate('error', { message: 'atualização só funciona no app instalado (não no npm start)' }); return; }
   try { autoUpdater.checkForUpdates(); } catch (e) { sendUpdate('error', { message: e && e.message }); }
 });
-ipcMain.handle('installUpdate', () => { try { autoUpdater.quitAndInstall(); } catch (e) { console.error('[updater] quitAndInstall', e && e.message); } });
+ipcMain.handle('installUpdate', () => quitAndInstallSafely());
 // novidades por versão: busca o changelog.json do repo (sempre atualizado); cai no empacotado se offline
 ipcMain.handle('getChangelog', async () => {
   try {
@@ -833,7 +1014,7 @@ function setupAutoUpdate() {
         buttons: ['Reiniciar e instalar', 'Depois'],
         defaultId: 0,
         cancelId: 1,
-      }).then((r) => { if (r.response === 0) autoUpdater.quitAndInstall(); }).catch(() => {});
+      }).then((r) => { if (r.response === 0) quitAndInstallSafely(); }).catch(() => {});
     });
     autoUpdater.on('error', (e) => sendUpdate('error', { message: e && e.message }));
     if (app.isPackaged) {
@@ -850,5 +1031,16 @@ app.whenReady().then(() => {
   app.on('activate', () => { if (BaseWindow.getAllWindows().length === 0) createWindow(); });
 });
 
-app.on('before-quit', () => { saveHuntLog(); });   // não perde o histórico acumulado ao fechar
+app.on('before-quit', (event) => {
+  saveHuntLog();
+  if (communityQuitFlushed || !shareStats || !persistentStateLoaded) return;
+  event.preventDefault();
+  if (communityQuitPending) return;
+  communityQuitPending = true;
+  flushCommunityBeforeQuit().finally(() => {
+    communityQuitPending = false;
+    communityQuitFlushed = true;
+    app.quit();
+  });
+});
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
