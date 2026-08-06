@@ -193,6 +193,16 @@
   .hl-ball .bp{ font-size:14px; font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums; }
   .hl-ball.off .bp{ color:var(--line2); }
   .hl-empty{ color:var(--mut); font-size:11.5px; line-height:1.6; padding:6px 2px 2px; }
+  /* linhas técnicas: rótulo à esquerda, número à direita */
+  .hl-rows{ margin-bottom:12px; }
+  .hl-r{ display:flex; align-items:baseline; gap:8px; font-size:11px; padding:3px 2px; border-bottom:1px solid rgba(31,39,52,.6); }
+  .hl-r:last-child{ border-bottom:0; }
+  .hl-r .lb{ color:var(--mut); flex:1 1 auto; min-width:0; }
+  .hl-r .vl{ color:var(--txt); font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .hl-r .vl.g{ color:var(--gold); }
+  .hl-r .vl.dim{ color:var(--line2); }
+  .hl-r .un{ color:var(--mut); font-weight:400; font-size:9.5px; }
+  .hl-note{ font-size:9.5px; color:#5f6b80; line-height:1.5; padding:2px 2px 0; }
 </style>
 </head>
 <body>
@@ -481,26 +491,63 @@
       + '<div class="t"><div class="sp">'+esc(sp)+'</div><div class="su">histórico acumulado</div></div>'
       + '<button class="x" id="hl-x" title="Fechar">✕</button></div>';
     if (!d || (!d.kills && !d.caught)) {
-      return head + '<div class="hl-empty">Ainda não há histórico para <b>'+esc(sp)+'</b>.<br>Assim que você caçar essa espécie com o launcher aberto, os números aparecem aqui e vão se acumulando.</div>';
+      // sem histórico ainda — mas o streak vem do jogo e já vale mostrar
+      const st0 = (d && d.streaks || []).filter(function(x){ return x && x.balls != null; });
+      const row0 = (lb, vl, cls) => '<div class="hl-r"><span class="lb">'+lb+'</span><span class="vl'+(cls?' '+cls:'')+'">'+vl+'</span></div>';
+      return head + '<div class="hl-empty">Ainda não há histórico para <b>'+esc(sp)+'</b>.<br>Assim que você caçar essa espécie com o launcher aberto, os números aparecem aqui e vão se acumulando.</div>'
+        + (st0.length ? '<div class="hl-sec" style="margin-top:12px">Streak atual — bolas sem capturar</div><div class="hl-rows">'
+            + st0.map(function(x){ return row0(esc(x.name) + (x.hunting ? ' <span class="un">· caçando agora</span>' : ''), fmtInt(x.balls), x.balls ? 'g' : 'dim'); }).join('')
+          + '</div>' : '');
     }
+    const thrown = (d.thrownA || 0) + (d.thrownB || 0);
     const tiles = '<div class="hl-tiles">'
       + hlTile('Tempo caçando', fmtDur(d.ms))
       + hlTile('Encontros', fmtInt(d.kills))
       + hlTile('Capturas', fmtInt(d.caught) + ' <span style="font-size:10px;color:var(--mut)">('+pctTxt(d.caught, d.kills)+')</span>')
       + hlTile('Shinies', fmtInt(d.shinies), 'shiny gold')
       + '</div>';
-    const ball = (nome, sprite, thrown, caught, nota) => {
-      const on = thrown > 0;
+
+    // "1 a cada N" — se ainda não houve o evento, mostra o que já se gastou sem ele
+    const row = (lb, vl, cls) => '<div class="hl-r"><span class="lb">'+lb+'</span><span class="vl'+(cls?' '+cls:'')+'">'+vl+'</span></div>';
+    const ratio = (tot, ev, un) => ev ? '1 <span class="un">a cada</span> ' + fmtInt(Math.round(tot / ev)) + ' <span class="un">'+un+'</span>' : '—';
+    const props = '<div class="hl-sec">Proporções</div><div class="hl-rows">'
+      + row('Captura', ratio(d.kills, d.caught, 'encontros'), 'g')
+      + row('Shiny (por encontro)', ratio(d.kills, d.shinies, 'encontros'), 'g')
+      + row('Shiny (por bola)', ratio(thrown, d.shinies, 'bolas'), 'g')
+      + row('Bolas por captura', d.caught ? (Math.round(thrown / d.caught * 10) / 10).toLocaleString('pt-BR') : '—')
+      + row('Bolas por encontro', d.kills ? (Math.round(thrown / d.kills * 100) / 100).toLocaleString('pt-BR') : '—')
+      + row('Total de bolas jogadas', fmtInt(thrown))
+      + (!d.shinies && thrown ? row('Bolas jogadas sem nenhum shiny', fmtInt(thrown), 'dim') : '')
+      + '</div>';
+
+    const perH = (n) => d.ms > 0 ? fmtInt(Math.round(n / (d.ms / 3600000))) + ' <span class="un">/h</span>' : '—';
+    const rates = '<div class="hl-sec">Por hora de caçada</div><div class="hl-rows">'
+      + row('Encontros', perH(d.kills))
+      + row('Capturas', perH(d.caught))
+      + row('Shinies', d.shinies ? perH(d.shinies) : '<span class="dim">0 <span class="un">/h</span></span>', 'g')
+      + row('Bolas gastas', perH(thrown))
+      + '</div>';
+
+    const ball = (nome, sprite, th, ct, nota) => {
+      const on = th > 0;
       return '<div class="hl-ball'+(on?'':' off')+'">'
         + '<img src="'+sprItem(sprite)+'" alt="" onerror="this.style.display=\'none\'">'
-        + '<span class="bn">'+nome+'<small>'+(on ? fmtInt(Math.round(caught))+' capturas em '+fmtInt(thrown)+' bolas' : 'nenhuma bola usada')+(nota?' · '+nota:'')+'</small></span>'
-        + '<span class="bp">'+(on ? pctTxt(caught, thrown) : '—')+'</span>'
+        + '<span class="bn">'+nome+'<small>'+(on ? fmtInt(Math.round(ct))+' capturas em '+fmtInt(th)+' bolas' : 'nenhuma bola usada')+(nota?' · '+nota:'')+'</small></span>'
+        + '<span class="bp">'+(on ? pctTxt(ct, th) : '—')+'</span>'
       + '</div>';
     };
     const balls = '<div class="hl-sec">Taxa de captura por bola</div>'
       + ball('Poke Ball', 'poke-ball', d.thrownA || 0, d.caughtA || 0, '')
       + ball('Ultra / Premier', 'ultra-ball', d.thrownB || 0, d.caughtB || 0, 'mesma chance');
-    return head + tiles + balls;
+
+    // streak: vem ao vivo do jogo (bolas gastas desde a última captura dessa espécie)
+    const st = (d.streaks || []).filter(function(x){ return x && x.balls != null; });
+    const streak = st.length ? '<div class="hl-sec" style="margin-top:12px">Streak atual — bolas sem capturar</div><div class="hl-rows">'
+      + st.map(function(x){ return row(esc(x.name) + (x.hunting ? ' <span class="un">· caçando agora</span>' : ''), fmtInt(x.balls), x.balls ? 'g' : 'dim'); }).join('')
+      + '</div>' : '';
+
+    return head + tiles + props + rates + balls + streak
+      + '<div class="hl-note">Bolas contadas pela queda na mochila; aumento é drop, não conta. Ultra e Premier somam por terem a mesma chance.</div>';
   }
   function openHuntLog(sp){
     if (!sp) return;

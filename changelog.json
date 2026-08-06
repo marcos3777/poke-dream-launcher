@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.5.0",
+    "date": "2026-08-06",
+    "changes": [
+      "Nova tela de Stats (botao 📊): capturas, shinies, encontros e dinheiro de cada conta, com as taxas por hora da sessao, barra de progresso da Pokedex e um resumo da cacada atual (encontros, capturas, % e bolas desde a ultima captura)",
+      "Historico por especie: passe o mouse em qualquer pokemon na Box ou na Pokedex e clique no + para ver quanto ja cacou aquela especie — tempo, encontros, capturas, shinies, proporcoes (1 shiny a cada X encontros/bolas), medias por hora, taxa de captura separada por Poke Ball e Ultra/Premier, e o streak atual de bolas sem capturar. Vai acumulando e nao zera ao trocar de cacada",
+      "Alerta de item baixo: a tela fica com borda vermelha quando alguma bola, potion ou revive passa do limite — da pra configurar o limite de cada item no menu ⚙",
+      "Cards das contas redesenhados: sprite maior e o texto sem cortar no meio",
+      "Corrige o arrastar dos cards, que ficou falhando depois que os itens foram para baixo deles"
+    ]
+  },
+  {
     "version": "1.4.0",
     "date": "2026-08-06",
     "changes": [
