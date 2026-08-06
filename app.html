@@ -39,24 +39,27 @@
   .side-h .t{ font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--mut); font-weight:700; }
   .side-h .s{ font-size:10.5px; color:#5a6478; }
   .acc-list{ display:flex; flex-direction:column; gap:8px; margin-top:4px; flex:1 1 auto; overflow-y:auto; }
-  .acc{ display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:10px;
+  .acc{ display:flex; flex-direction:column; align-items:stretch; gap:5px; padding:8px 9px 9px; border-radius:10px;
     border:1px solid var(--line); background:var(--panel); color:var(--txt); cursor:pointer; text-align:left;
     font-size:12.5px; font-weight:700; width:100%; transition:border-color .15s,background .15s; }
   .acc:hover{ background:#1a2231; } .acc.on{ border-color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset; background:#1a1e0b; }
-  .acc.dragging{ opacity:.4; }
-  .acc.drag-over{ border-color:var(--gold); box-shadow:0 -2px 0 var(--gold) inset; }
-  .acc-sprites{ position:relative; width:56px; height:44px; flex:0 0 56px; }
-  .acc-spr{ position:absolute; right:0; bottom:0; width:42px; height:42px; object-fit:contain; image-rendering:pixelated; z-index:2; }
-  .acc-spr.ph{ right:0; bottom:0; width:42px; height:42px; background:var(--panel2); border-radius:8px; border:1px solid var(--line2); }
-  .acc-spr2{ position:absolute; left:0; bottom:1px; width:31px; height:31px; object-fit:contain; image-rendering:pixelated; z-index:1; opacity:.62; filter:brightness(.8); }
-  .acc-info{ min-width:0; flex:1 1 auto; display:flex; flex-direction:column; gap:1px; }
-  .acc-name{ font-weight:700; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .acc-sub{ font-weight:400; font-size:10.5px; color:var(--mut); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .acc-wrap.dragging{ opacity:.4; }
+  .acc-wrap.drag-over .acc{ border-color:var(--gold); box-shadow:0 -2px 0 var(--gold) inset; }
+  .acc.low, .acc.low.on{ border-color:#e5484d; box-shadow:0 0 0 1px #e5484d inset, 0 0 9px rgba(229,72,77,.30); }  /* alerta de item baixo */
+  .acc-top{ display:flex; align-items:center; gap:4px; }
+  .acc-body{ display:flex; align-items:center; gap:8px; }
+  .acc-sprites{ position:relative; width:64px; height:54px; flex:0 0 64px; }
+  .acc-spr{ position:absolute; right:0; bottom:0; width:54px; height:54px; object-fit:contain; image-rendering:pixelated; z-index:2; }
+  .acc-spr.ph{ right:0; bottom:0; width:54px; height:54px; background:var(--panel2); border-radius:8px; border:1px solid var(--line2); }
+  .acc-spr2{ position:absolute; left:0; bottom:1px; width:38px; height:38px; object-fit:contain; image-rendering:pixelated; z-index:1; opacity:.6; filter:brightness(.78); }
+  .acc-info{ min-width:0; flex:1 1 auto; display:flex; flex-direction:column; gap:2px; }
+  .acc-name{ flex:1 1 auto; min-width:0; font-weight:700; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .acc-sub{ font-weight:400; font-size:11px; color:var(--mut); line-height:1.25; overflow-wrap:anywhere; }
   .acc-sub.shiny{ color:var(--gold); font-weight:700; }
-  .acc-p2{ font-weight:400; font-size:9px; color:#7b8698; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .acc-p2{ font-weight:400; font-size:9.5px; color:#7b8698; line-height:1.25; overflow-wrap:anywhere; }
   .acc-p2 b{ color:#7b8698; font-weight:700; }
-  .acc-hunt{ font-weight:400; font-size:10px; color:#5a6478; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .acc-reload{ flex:0 0 auto; color:var(--mut); font-size:15px; padding:3px 6px; border-radius:6px; opacity:0; transition:opacity .12s,color .12s; }
+  .acc-hunt{ font-weight:400; font-size:10px; color:#5a6478; line-height:1.25; overflow-wrap:anywhere; }
+  .acc-reload{ flex:0 0 auto; color:var(--mut); font-size:15px; padding:2px 5px; border-radius:6px; opacity:0; transition:opacity .12s,color .12s; }
   .acc:hover .acc-reload{ opacity:.85; }
   .acc-reload:hover{ color:var(--warn); background:var(--panel2); opacity:1; }
   .addacc{ margin-top:6px; padding:9px; border-radius:9px; border:1px dashed var(--line2);
@@ -116,7 +119,8 @@
   .dex-cell:not(.has):hover{ opacity:.85; }
 
   /* ---- Itens (Suprimentos) logo abaixo de cada card: mini-cards com número + ícone + label ---- */
-  .acc-wrap{ display:flex; flex-direction:column; gap:5px; }
+  .acc-wrap{ display:flex; flex-direction:column; gap:5px; cursor:grab; }
+  .acc-wrap:active{ cursor:grabbing; }
   .acc-items{ display:grid; grid-template-columns:repeat(3,1fr); gap:4px; padding:0 1px; }
   .itc{ background:var(--panel2); border:1px solid var(--line2); border-radius:8px; padding:4px 3px; display:flex; flex-direction:column; align-items:center; gap:1px; min-width:0; }
   .itc .top{ display:flex; align-items:center; gap:3px; }
@@ -125,6 +129,70 @@
   .itc .l{ font-size:8px; letter-spacing:.3px; text-transform:uppercase; color:var(--mut); font-weight:700; }
   .itc.z{ opacity:.5; }
   .itc.z .v{ color:var(--mut); }
+  .itc.low{ opacity:1; border-color:#e5484d; background:#2a1416; }
+  .itc.low .v{ color:#ff6b6f; }
+
+  /* ---- Stats (painel de estatísticas por conta) ---- */
+  .st-scroll{ flex:1 1 auto; overflow-y:auto; overflow-x:hidden; margin-top:10px; padding-right:2px; }
+  .st-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(310px,1fr)); gap:12px; padding-bottom:14px; }
+  .st-card{ background:linear-gradient(160deg,#141a26 0%,#10141d 100%); border:1px solid var(--line2); border-radius:14px; padding:13px 14px 12px; }
+  .st-card.total{ border-color:#3a4762; background:linear-gradient(160deg,#181d2b 0%,#121724 100%); }
+  .st-head{ display:flex; align-items:center; gap:8px; margin-bottom:11px; }
+  .st-head .nm{ font-size:13.5px; font-weight:800; color:var(--txt); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .st-head .lv{ font-size:9.5px; color:var(--mut); background:var(--panel2); border:1px solid var(--line); border-radius:20px; padding:2px 8px; font-weight:700; white-space:nowrap; }
+  .st-head .sess{ margin-left:auto; font-size:9.5px; color:var(--mut); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .st-tiles{ display:grid; grid-template-columns:repeat(2,1fr); gap:7px; }
+  .st-t{ background:#0d1119; border:1px solid var(--line); border-radius:10px; padding:7px 8px; min-width:0; }
+  .st-t .k{ font-size:8.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--mut); font-weight:700; margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .st-t .n{ font-size:15px; font-weight:800; color:var(--txt); font-variant-numeric:tabular-nums; line-height:1.1; }
+  .st-t .r{ font-size:9px; color:#5f6b80; font-variant-numeric:tabular-nums; margin-top:2px; }
+  .st-t .r b{ color:var(--gold); font-weight:700; }
+  .st-t.gold .n{ color:var(--gold); }
+  .st-t.shiny{ border-color:#3b3517; background:#151308; }
+  .st-dex{ margin-top:9px; }
+  .st-dex .lbl{ display:flex; justify-content:space-between; font-size:9.5px; color:var(--mut); font-weight:700; margin-bottom:4px; }
+  .st-dex .lbl b{ color:var(--txt); font-variant-numeric:tabular-nums; }
+  .st-bar{ height:6px; border-radius:6px; background:#0d1119; border:1px solid var(--line); overflow:hidden; }
+  .st-bar > span{ display:block; height:100%; background:linear-gradient(90deg,#ffce56,#ff9f43); }
+  .st-bar.sh > span{ background:linear-gradient(90deg,#8ab4ff,#5f8dd6); }
+  .st-foot{ margin-top:9px; padding-top:8px; border-top:1px solid var(--line); font-size:10px; color:var(--mut); line-height:1.55; }
+  .st-foot b{ color:var(--txt); font-weight:700; font-variant-numeric:tabular-nums; }
+  .st-foot .warn b{ color:#ff8a3d; }
+  .st-foot .hd{ font-size:10.5px; color:var(--txt); margin-bottom:3px; }
+  .st-foot .hd b{ color:var(--gold); }
+  .st-foot .hd .ago{ color:#5f6b80; font-weight:400; }
+  .st-empty{ color:var(--mut); font-size:12px; padding:14px 2px; }
+
+  /* ---- botão "+" (histórico da espécie) nos cards da Box/Pokédex e no card de Stats ---- */
+  .hl-btn{ position:absolute; top:2px; right:3px; width:15px; height:15px; border-radius:5px; border:1px solid var(--line2);
+    background:#0d1119; color:var(--mut); font-size:11px; line-height:13px; text-align:center; font-weight:800;
+    cursor:pointer; opacity:0; transition:opacity .12s,color .12s,border-color .12s; z-index:3; }
+  .box-cell:hover .hl-btn, .dex-cell:hover .hl-btn{ opacity:1; }
+  .box-cell:hover .sh{ opacity:0; }   /* o ✨ e o + dividem o canto — no hover mostra só o + */
+  .hl-btn:hover{ color:var(--gold); border-color:var(--gold); background:#1a1e0b; }
+  .st-foot .hl-btn{ position:static; display:inline-block; opacity:.75; margin-left:5px; vertical-align:middle; }
+  .st-foot .hl-btn:hover{ opacity:1; }
+
+  /* ---- modal do histórico acumulado da espécie ---- */
+  .hl-back{ position:fixed; inset:0; background:rgba(6,9,14,.68); z-index:70; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .hl-modal{ width:min(400px,100%); max-height:100%; overflow-y:auto; background:linear-gradient(160deg,#161c2a 0%,#11151f 100%);
+    border:1px solid var(--line2); border-radius:16px; padding:16px 17px 15px; box-shadow:0 18px 50px rgba(0,0,0,.6); }
+  .hl-h{ display:flex; align-items:center; gap:11px; margin-bottom:13px; }
+  .hl-h img{ width:52px; height:52px; image-rendering:pixelated; flex:0 0 52px; }
+  .hl-h .t{ min-width:0; flex:1 1 auto; }
+  .hl-h .sp{ font-size:15px; font-weight:800; color:var(--txt); line-height:1.2; }
+  .hl-h .su{ font-size:10px; color:var(--mut); font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+  .hl-h .x{ flex:0 0 auto; width:25px; height:24px; border-radius:7px; border:1px solid var(--line2); background:transparent; color:var(--mut); font-size:12px; cursor:pointer; }
+  .hl-h .x:hover{ color:#fff; background:#7a2130; border-color:#7a2130; }
+  .hl-tiles{ display:grid; grid-template-columns:repeat(2,1fr); gap:7px; margin-bottom:12px; }
+  .hl-sec{ font-size:9.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--mut); font-weight:800; margin:0 0 7px; }
+  .hl-ball{ display:flex; align-items:center; gap:9px; background:#0d1119; border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin-bottom:6px; }
+  .hl-ball img{ width:20px; height:20px; image-rendering:pixelated; flex:0 0 20px; }
+  .hl-ball .bn{ font-size:11px; font-weight:700; color:var(--txt); flex:1 1 auto; min-width:0; }
+  .hl-ball .bn small{ display:block; font-size:9px; color:var(--mut); font-weight:400; }
+  .hl-ball .bp{ font-size:14px; font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums; }
+  .hl-ball.off .bp{ color:var(--line2); }
+  .hl-empty{ color:var(--mut); font-size:11.5px; line-height:1.6; padding:6px 2px 2px; }
 </style>
 </head>
 <body>
@@ -136,6 +204,7 @@
     <button class="tbtn" id="btn-grid" style="display:none">▦ Grade</button>
     <button class="tbtn" id="btn-box">📦 Box</button>
     <button class="tbtn" id="btn-dex">📘 Pokédex</button>
+    <button class="tbtn" id="btn-stats">📊 Stats</button>
     <button class="tbtn" id="btn-add">+ Adicionar tela</button>
     <button class="ico" id="btn-cfg" title="Configuracoes / Atualizacao">⚙</button>
     <button class="ico" id="btn-min">—</button>
@@ -230,6 +299,7 @@
       const d = dexNum(r.species);
       const num = d ? '#' + String(d).padStart(3, '0') : '';
       return '<div class="box-cell" draggable="true" data-key="'+esc(keyOf(r))+'">'
+        + '<span class="hl-btn" data-sp="'+esc(r.species)+'" title="Histórico de caçada">+</span>'
         + '<span class="box-num">' + num + '</span>'
         + (s ? '<img src="'+s+'" loading="lazy" onerror="this.style.visibility=\'hidden\'">' : '')
         + '<span class="box-name'+(r.shiny?' shiny':'')+'">' + esc(r.species) + '</span>'
@@ -293,7 +363,8 @@
   function toggleBox(open){
     boxOpen = (open == null) ? !boxOpen : !!open;
     document.getElementById('btn-box').classList.toggle('on', boxOpen);
-    if (boxOpen && dexOpen) { dexOpen = false; document.getElementById('btn-dex').classList.remove('on'); }  // box e pokédex dividem o #main
+    if (boxOpen && dexOpen) { dexOpen = false; document.getElementById('btn-dex').classList.remove('on'); }  // box, pokédex e stats dividem o #main
+    if (boxOpen && statsOpen) closeStats();
     if (P && P.setBoxOpen) P.setBoxOpen(boxOpen);
     if (boxOpen) loadBox(); else { hideTip(); renderSidebar(); }
   }
@@ -333,6 +404,7 @@
       const s = sprStatic(e.species, dexShiny);   // sprite na cor certa (shiny ou normal)
       const num = '#' + String(e.dex).padStart(3, '0');
       return '<div class="dex-cell'+(has?' has':'')+'" data-sp="'+esc(e.species)+'">'
+        + '<span class="hl-btn" data-sp="'+esc(e.species)+'" title="Histórico de caçada">+</span>'
         + '<span class="box-num">' + num + '</span>'
         + (s ? '<img src="'+s+'" loading="lazy" onerror="this.style.visibility=\'hidden\'">' : '')
         + '<span class="box-name">' + esc(e.species) + '</span>'
@@ -390,8 +462,167 @@
     dexOpen = (open == null) ? !dexOpen : !!open;
     document.getElementById('btn-dex').classList.toggle('on', dexOpen);
     if (dexOpen && boxOpen) { boxOpen = false; document.getElementById('btn-box').classList.remove('on'); }
+    if (dexOpen && statsOpen) closeStats();
     if (P && P.setBoxOpen) P.setBoxOpen(dexOpen);   // reusa o mesmo mecanismo da box (esconde as telas do jogo)
     if (dexOpen) loadDex(); else { hideTip(); renderSidebar(); }
+  }
+
+  // ---- histórico acumulado por espécie (modal do "+") ----
+  // Acumula somando todas as contas e persiste em disco; não zera ao trocar de hunt.
+  let hlBack = null;
+  function closeHuntLog(){ if (hlBack){ hlBack.remove(); hlBack = null; document.removeEventListener('keydown', hlEsc); } }
+  function hlEsc(e){ if (e.key === 'Escape') closeHuntLog(); }
+  function pctTxt(num, den){ return den ? (Math.round(num / den * 1000) / 10) + '%' : '—'; }
+  function hlTile(k, n, cls){ return '<div class="st-t'+(cls?' '+cls:'')+'"><div class="k">'+k+'</div><div class="n">'+n+'</div></div>'; }
+  function huntLogHTML(sp, d){
+    const spr = sprStatic(sp, false);
+    const head = '<div class="hl-h">'
+      + (spr ? '<img src="'+spr+'" alt="" onerror="this.style.display=\'none\'">' : '')
+      + '<div class="t"><div class="sp">'+esc(sp)+'</div><div class="su">histórico acumulado</div></div>'
+      + '<button class="x" id="hl-x" title="Fechar">✕</button></div>';
+    if (!d || (!d.kills && !d.caught)) {
+      return head + '<div class="hl-empty">Ainda não há histórico para <b>'+esc(sp)+'</b>.<br>Assim que você caçar essa espécie com o launcher aberto, os números aparecem aqui e vão se acumulando.</div>';
+    }
+    const tiles = '<div class="hl-tiles">'
+      + hlTile('Tempo caçando', fmtDur(d.ms))
+      + hlTile('Encontros', fmtInt(d.kills))
+      + hlTile('Capturas', fmtInt(d.caught) + ' <span style="font-size:10px;color:var(--mut)">('+pctTxt(d.caught, d.kills)+')</span>')
+      + hlTile('Shinies', fmtInt(d.shinies), 'shiny gold')
+      + '</div>';
+    const ball = (nome, sprite, thrown, caught, nota) => {
+      const on = thrown > 0;
+      return '<div class="hl-ball'+(on?'':' off')+'">'
+        + '<img src="'+sprItem(sprite)+'" alt="" onerror="this.style.display=\'none\'">'
+        + '<span class="bn">'+nome+'<small>'+(on ? fmtInt(Math.round(caught))+' capturas em '+fmtInt(thrown)+' bolas' : 'nenhuma bola usada')+(nota?' · '+nota:'')+'</small></span>'
+        + '<span class="bp">'+(on ? pctTxt(caught, thrown) : '—')+'</span>'
+      + '</div>';
+    };
+    const balls = '<div class="hl-sec">Taxa de captura por bola</div>'
+      + ball('Poke Ball', 'poke-ball', d.thrownA || 0, d.caughtA || 0, '')
+      + ball('Ultra / Premier', 'ultra-ball', d.thrownB || 0, d.caughtB || 0, 'mesma chance');
+    return head + tiles + balls;
+  }
+  function openHuntLog(sp){
+    if (!sp) return;
+    hideTip(); closeHuntLog();
+    hlBack = document.createElement('div');
+    hlBack.className = 'hl-back';
+    hlBack.innerHTML = '<div class="hl-modal"><div class="hl-empty">Carregando…</div></div>';
+    document.body.appendChild(hlBack);
+    hlBack.addEventListener('click', function(e){ if (e.target === hlBack) closeHuntLog(); });
+    document.addEventListener('keydown', hlEsc);
+    const fill = function(d){
+      if (!hlBack) return;
+      hlBack.querySelector('.hl-modal').innerHTML = huntLogHTML(sp, d);
+      const x = hlBack.querySelector('#hl-x'); if (x) x.onclick = closeHuntLog;
+    };
+    if (P && P.getHuntLog) P.getHuntLog(sp).then(fill).catch(function(){ fill(null); });
+    else fill(null);
+  }
+  // liga os "+" (delegação: funciona pra Box, Pokédex e Stats sem religar a cada render)
+  document.addEventListener('click', function(e){
+    const b = e.target.closest && e.target.closest('.hl-btn');
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    openHuntLog(b.dataset.sp);
+  });
+
+  // ---- Stats: totais do jogo + taxas desta sessão, por conta ----
+  const DEX_TOTAL = DEX_LIST.length;   // espécies que o launcher conhece (Kanto+Johto)
+  let statsOpen = false, statsTimer = null;
+  function fmtInt(n){ return n == null ? '—' : (n).toLocaleString('pt-BR'); }
+  function fmtDur(ms){
+    const s = Math.floor((ms || 0) / 1000), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+    return h ? (h + 'h ' + String(m).padStart(2,'0') + 'm') : (m + 'm');
+  }
+  function rateTxt(v, suf){ return v == null ? '' : '<b>' + abbrN(v) + '</b>/h' + (suf || ''); }
+  function tile(k, n, cls, rate){
+    return '<div class="st-t'+(cls?' '+cls:'')+'"><div class="k">'+k+'</div><div class="n">'+n+'</div>'
+      + (rate ? '<div class="r">'+rate+'</div>' : '') + '</div>';
+  }
+  function bar(cur, total, sh){
+    const pct = total ? Math.min(Math.round((cur || 0) / total * 100), 100) : 0;
+    return '<div class="st-bar'+(sh?' sh':'')+'"><span style="width:'+pct+'%"></span></div>';
+  }
+  function statCard(r, isTotal){
+    const lv = !isTotal && (r.trainerLevel != null || r.activeLevel != null)
+      ? '<span class="lv">Treinador <b style="color:var(--txt)">'+(r.trainerLevel != null ? r.trainerLevel : '—')+'</b> · Ativo Lv '+(r.activeLevel != null ? r.activeLevel : '—')+'</span>' : '';
+    const sess = r.sessionMs ? '<span class="sess">⏱ '+fmtDur(r.sessionMs)+'</span>' : '';
+    const ph = r.perHour || {};
+    const dex = !isTotal ? '<div class="st-dex">'
+        + '<div class="lbl"><span>Pokédex</span><b>'+fmtInt(r.species)+' / '+DEX_TOTAL+'</b></div>' + bar(r.species, DEX_TOTAL)
+        + '<div class="lbl" style="margin-top:6px"><span>Shiny</span><b>'+fmtInt(r.shinySpecies)+' / '+DEX_TOTAL+'</b></div>' + bar(r.shinySpecies, DEX_TOTAL, true)
+      + '</div>' : '';
+    const h = r.hunt;
+    const foot = !isTotal && h ? '<div class="st-foot">'
+        + '<div class="hd">🗺 Caçada atual: <b>'+esc(h.species || titce(h.id || '—'))+'</b> <span class="ago">· '+fmtDur(h.ms)+'</span>'
+          + (h.species ? '<span class="hl-btn" data-sp="'+esc(h.species)+'" title="Histórico acumulado dessa espécie">+</span>' : '') + '</div>'
+        + '<div>⚔ <b>'+fmtInt(h.kills)+'</b> encontros · <b>'+fmtInt(h.caught)+'</b> capturas'
+          + (h.catchRate != null ? ' (<b>'+h.catchRate+'%</b>)' : '') + '</div>'
+        + '<div>✨ <b>'+fmtInt(h.shinies)+'</b> shiny' + (h.shinies === 1 ? '' : 's')
+          + (h.shinyRatio ? ' · 1 a cada <b>'+fmtInt(h.shinyRatio)+'</b>' : '') + '</div>'
+        + (h.ballsSince != null ? '<div class="warn">🎯 <b>'+fmtInt(h.ballsSince)+'</b> bolas desde a última captura</div>' : '')
+      + '</div>' : '';
+    return '<div class="st-card'+(isTotal?' total':'')+'">'
+      + '<div class="st-head"><span class="nm">'+(isTotal ? '🏆 Todas as contas' : esc(r.name))+'</span>'+lv+sess+'</div>'
+      + '<div class="st-tiles">'
+        + tile('Capturas', fmtInt(r.caught), '', rateTxt(ph.caught))
+        + tile('Shinies', fmtInt(r.shinies), 'shiny gold', rateTxt(ph.shinies))
+        + tile('Encontros', fmtInt(r.kills), '', rateTxt(ph.kills))
+        + tile('Dinheiro', fmtInt(r.money), 'gold', rateTxt(ph.money))
+      + '</div>' + dex + foot
+    + '</div>';
+  }
+  function sumStats(rows){
+    const t = { caught:0, kills:0, shinies:0, money:0, sessionMs:0, perHour:{caught:0,kills:0,shinies:0,money:0} };
+    let anyRate = false;
+    rows.forEach(function(r){
+      ['caught','kills','shinies','money'].forEach(function(k){ if (r[k] != null) t[k] += r[k]; });
+      if (r.sessionMs > t.sessionMs) t.sessionMs = r.sessionMs;
+      const ph = r.perHour || {};
+      Object.keys(t.perHour).forEach(function(k){ if (ph[k] != null) { t.perHour[k] += ph[k]; anyRate = true; } });
+    });
+    if (!anyRate) t.perHour = {};
+    return t;
+  }
+  function renderStats(rows){
+    const main = document.getElementById('main');
+    const body = rows.length
+      ? '<div class="st-grid">' + (rows.length > 1 ? statCard(sumStats(rows), true) : '') + rows.map(function(r){ return statCard(r, false); }).join('') + '</div>'
+      : '<div class="st-empty">Nenhuma tela aberta. Abra uma conta para ver as estatísticas.</div>';
+    main.innerHTML =
+      '<div class="box-wrap">'
+        + '<div class="box-top">'
+          + '<b>📊 Stats</b>'
+          + '<span class="box-count">'+rows.length+(rows.length === 1 ? ' conta' : ' contas')+'</span>'
+          + '<span style="font-size:10.5px;color:var(--mut)">as taxas /h são desta sessão · atualiza sozinho</span>'
+        + '</div>'
+        + '<div class="st-scroll">' + body + '</div>'
+      + '</div>';
+  }
+  function loadStats(first){
+    if (!P || !P.getStats) return;
+    if (first) document.getElementById('main').innerHTML = '<div class="empty">Carregando estatísticas…</div>';
+    P.getStats().then(function(d){ if (statsOpen) renderStats(d || []); })
+      .catch(function(){ if (first) document.getElementById('main').innerHTML = '<div class="empty">Não consegui carregar as estatísticas.</div>'; });
+  }
+  // fecha só o estado do painel (sem mexer no setBoxOpen) — usado quando a Box/Pokédex assume o #main
+  function closeStats(){
+    statsOpen = false;
+    document.getElementById('btn-stats').classList.remove('on');
+    if (statsTimer){ clearInterval(statsTimer); statsTimer = null; }
+  }
+  function toggleStats(open){
+    statsOpen = (open == null) ? !statsOpen : !!open;
+    document.getElementById('btn-stats').classList.toggle('on', statsOpen);
+    if (statsOpen){
+      if (boxOpen){ boxOpen = false; document.getElementById('btn-box').classList.remove('on'); }
+      if (dexOpen){ dexOpen = false; document.getElementById('btn-dex').classList.remove('on'); }
+    }
+    if (P && P.setBoxOpen) P.setBoxOpen(statsOpen);
+    if (statsTimer){ clearInterval(statsTimer); statsTimer = null; }
+    if (statsOpen){ loadStats(true); statsTimer = setInterval(function(){ loadStats(false); }, 5000); }   // ao vivo
+    else { hideTip(); renderSidebar(); }
   }
 
   // ---- Suprimentos de cada conta, logo abaixo do card: mini-cards (linha 1 = balls, linha 2 = pot/revive) ----
@@ -401,15 +632,22 @@
     ['potion','Potion','potion'], ['revive','Revive','revive'],
   ];
   let itemVis = { poke_ball: true, ultra_ball: true, premier_ball: true, potion: true, revive: true };   // config (menu ⚙ > Itens)
+  let itemAlert = { poke_ball: 2000, ultra_ball: 2000, premier_ball: 2000, potion: 2000, revive: 500 };  // limite p/ borda vermelha (0 = off)
   function sprItem(name){ return 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/' + name + '.png'; }
   function abbrN(n){ n = n || 0; if (n >= 1e6) return (n/1e6).toFixed(1).replace('.',',') + 'M'; if (n >= 1e3) return (n/1e3).toFixed(1).replace('.',',') + 'k'; return String(n); }
+  function isLow(key, v){ const t = itemAlert[key] || 0; return t > 0 && (v || 0) < t; }   // abaixo do limite configurado
+  // itens visíveis que estão baixos numa conta -> usados pra borda vermelha do card + tooltip
+  function accLowItems(inf){
+    const it = inf && inf.items; if (!it) return [];
+    return ITM_DEFS.filter(function(c){ return itemVis[c[0]] !== false && isLow(c[0], it[c[0]]); }).map(function(c){ return c[1]; });
+  }
   function itemsForAcc(inf){
     const it = inf && inf.items; if (!it) return '';
     const defs = ITM_DEFS.filter(function(c){ return itemVis[c[0]] !== false; });
     if (!defs.length) return '';
     const cards = defs.map(function(c){
-      const v = it[c[0]] || 0;
-      return '<div class="itc'+(v?'':' z')+'" title="'+c[1]+': '+v.toLocaleString('pt-BR')+'">'
+      const v = it[c[0]] || 0, lo = isLow(c[0], v);
+      return '<div class="itc'+(v?'':' z')+(lo?' low':'')+'" title="'+c[1]+': '+v.toLocaleString('pt-BR')+(lo?' — baixo!':'')+'">'
         + '<span class="top"><img src="'+sprItem(c[2])+'" alt="" loading="lazy" onerror="this.style.display=\'none\'"><span class="v">'+abbrN(v)+'</span></span>'
         + '<span class="l">'+c[1]+'</span>'
       + '</div>';
@@ -431,17 +669,21 @@
         : '<span class="acc-spr ph"></span>';
       const back = p2 ? '<img class="acc-spr2" src="'+spr(p2.species, p2.shiny)+'" title="2º da party" onerror="this.style.display=\'none\'">' : '';
       const sprites = '<span class="acc-sprites">' + back + front + '</span>';
-      const sub = a ? (esc(a.species) + ' Lv' + a.level + (a.shiny ? ' ✨' : '')) : 'carregando…';
+      const sub = a ? (esc(a.species) + ' Lv' + a.level) : 'carregando…';   // shiny já fica dourado, não precisa de emote
       const p2line = p2 ? '<span class="acc-p2" title="2º pokémon da party">'
         + esc(p2.species)
         + (p2.xpPct != null ? ' <b>XP ' + p2.xpPct + '%</b>' : '') + '</span>' : '';
-      const hunt = inf.hunt ? '<span class="acc-hunt">🗺 caçando ' + esc(titce(inf.hunt)) + '</span>' : '';
-      const card = '<button class="acc'+(isSel?' on':'')+'" draggable="true" data-slot="'+s+'">'
-        + sprites
-        + '<span class="acc-info"><span class="acc-name">'+esc(name)+'</span><span class="acc-sub'+(a&&a.shiny?' shiny':'')+'">'+sub+'</span>'+p2line+hunt+'</span>'
-        + '<span class="acc-reload" data-reload="'+s+'" title="Recarregar">&#x21bb;</span>'
+      const hunt = inf.hunt ? '<span class="acc-hunt" title="caçando ' + esc(titce(inf.hunt)) + '">🗺 ' + esc(titce(inf.hunt)) + '</span>' : '';
+      const low = accLowItems(inf);
+      const card = '<button class="acc'+(isSel?' on':'')+(low.length?' low':'')+'" data-slot="'+s+'"'+(low.length?' title="⚠ Item baixo: '+esc(low.join(', '))+'"':'')+'>'
+        + '<span class="acc-top"><span class="acc-name">'+esc(name)+'</span>'
+          + '<span class="acc-reload" data-reload="'+s+'" title="Recarregar">&#x21bb;</span></span>'
+        + '<span class="acc-body">' + sprites
+          + '<span class="acc-info"><span class="acc-sub'+(a&&a.shiny?' shiny':'')+'">'+sub+'</span>'+p2line+hunt+'</span>'
+        + '</span>'
         + '</button>';
-      return '<div class="acc-wrap">' + card + itemsForAcc(inf) + '</div>';
+      // o wrap inteiro (card + itens) é o alvo do arrastar — senão o bloco de itens vira zona morta
+      return '<div class="acc-wrap" draggable="true" data-wrap="'+s+'">' + card + itemsForAcc(inf) + '</div>';
     }).join('');
 
     const focusHTML = mode === 'single' && selected
@@ -458,21 +700,22 @@
     side.innerHTML = html;
 
     // fiação por addEventListener (sem onclick inline no HTML)
-    side.querySelectorAll('[data-slot]').forEach(b => b.addEventListener('click', () => { if (boxOpen) toggleBox(false); if (dexOpen) toggleDex(false); if (P) P.selectAccount(+b.dataset.slot); }));
+    side.querySelectorAll('[data-slot]').forEach(b => b.addEventListener('click', () => { if (boxOpen) toggleBox(false); if (dexOpen) toggleDex(false); if (statsOpen) toggleStats(false); if (P) P.selectAccount(+b.dataset.slot); }));
     side.querySelectorAll('[data-reload]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); if (P) P.reloadGame(+b.dataset.reload); }));
 
     // arrastar os cards pra reordenar as contas (reordena as telas do jogo junto)
     let dragSlot = null;
-    side.querySelectorAll('.acc').forEach(function(card){
-      card.addEventListener('dragstart', function(e){ dragSlot = +card.dataset.slot; card.classList.add('dragging'); if (e.dataTransfer){ e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', String(dragSlot)); } catch {} } });
-      card.addEventListener('dragend', function(){ card.classList.remove('dragging'); side.querySelectorAll('.acc.drag-over').forEach(c => c.classList.remove('drag-over')); });
+    side.querySelectorAll('.acc-wrap').forEach(function(card){
+      card.addEventListener('dragstart', function(e){ dragSlot = +card.dataset.wrap; card.classList.add('dragging'); if (e.dataTransfer){ e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', String(dragSlot)); } catch {} } });
+      card.addEventListener('dragend', function(){ card.classList.remove('dragging'); side.querySelectorAll('.acc-wrap.drag-over').forEach(c => c.classList.remove('drag-over')); });
       card.addEventListener('dragover', function(e){ e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; });
-      card.addEventListener('dragenter', function(){ if (+card.dataset.slot !== dragSlot) card.classList.add('drag-over'); });
-      card.addEventListener('dragleave', function(){ card.classList.remove('drag-over'); });
+      card.addEventListener('dragenter', function(){ if (+card.dataset.wrap !== dragSlot) card.classList.add('drag-over'); });
+      // só tira o realce ao sair do bloco de vez (passar do card pros itens não conta)
+      card.addEventListener('dragleave', function(e){ if (!card.contains(e.relatedTarget)) card.classList.remove('drag-over'); });
       card.addEventListener('drop', function(e){
         e.preventDefault(); card.classList.remove('drag-over');
         const from = dragSlot != null ? dragSlot : (e.dataTransfer && +e.dataTransfer.getData('text/plain'));
-        const to = +card.dataset.slot;
+        const to = +card.dataset.wrap;
         if (from == null || Number.isNaN(from) || from === to) return;
         const order = accounts.slice();
         const fi = order.indexOf(from); if (fi < 0) return;
@@ -493,8 +736,8 @@
       btnGrid.classList.remove('on');
     }
 
-    // enquanto a box ou a pokédex estão abertas elas ocupam o #main — não mexer
-    if (!boxOpen && !dexOpen) {
+    // enquanto a box, a pokédex ou as stats estão abertas elas ocupam o #main — não mexer
+    if (!boxOpen && !dexOpen && !statsOpen) {
       document.getElementById('main').innerHTML = accounts.length
         ? ''
         : '<div class="empty">Nenhuma tela aberta.<br>Clique em <b>+ Adicionar tela</b> para começar.</div>';
@@ -514,7 +757,8 @@
   document.getElementById('btn-add').onclick = function() { if (P) P.addView(); };
   document.getElementById('btn-box').onclick = function() { toggleBox(); };
   document.getElementById('btn-dex').onclick = function() { toggleDex(); };
-  document.getElementById('btn-grid').onclick = function() { if (boxOpen) toggleBox(false); if (dexOpen) toggleDex(false); if (P) P.setGameMode('grid'); };
+  document.getElementById('btn-stats').onclick = function() { toggleStats(); };
+  document.getElementById('btn-grid').onclick = function() { if (boxOpen) toggleBox(false); if (dexOpen) toggleDex(false); if (statsOpen) toggleStats(false); if (P) P.setGameMode('grid'); };
   document.getElementById('btn-min').onclick = function() { if (P) P.winMinimize(); };
   document.getElementById('btn-max').onclick = function() { if (P) P.winMaximize(); };
   document.getElementById('btn-close').onclick = function() { if (P) P.winClose(); };
@@ -548,7 +792,7 @@
     if (typeof cfg.volume === 'number') sndVolume = cfg.volume;
     if (cfg.dataUrl) { sndAudio = new Audio(cfg.dataUrl); }   // pré-carrega o áudio atual
   });
-  if (P && P.onItemConfig) P.onItemConfig(function(v){ if (v) { itemVis = v; renderSidebar(); } });   // menu ⚙ > Itens: mostrar/esconder cada item
+  if (P && P.onItemConfig) P.onItemConfig(function(p){ if (!p) return; if (p.vis) itemVis = p.vis; if (p.alert) itemAlert = p.alert; renderSidebar(); });   // menu ⚙ > Itens: visibilidade + limite de alerta
   if (P && P.onShinyCaught) P.onShinyCaught(function(){ if (sndEnabled) playSound(null, sndVolume); });
   if (P && P.onPlaySound) P.onPlaySound(function(p){ playSound(p && p.dataUrl, p && p.volume); });   // botão testar (ignora o enabled)
 </script>

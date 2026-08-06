@@ -31,10 +31,12 @@ let diagOn = false;      // modo diagnóstico: grava frames WS + respostas REST 
 let DUMP_FILE = null;
 let SESSION_FILE = null;   // guarda quantas telas estavam abertas, pra reabrir na próxima vez
 let SETTINGS_FILE = null;  // preferências (som)
+let HUNTLOG_FILE = null;   // histórico acumulado de caçada por espécie
 let soundEnabled = true;   // tocar som ao capturar shiny
 let soundVolume = 0.8;     // 0..1
 let soundPath = null;      // caminho de um áudio do PC do usuário; null = som padrão embutido
 let itemVis = { poke_ball: true, ultra_ball: true, premier_ball: true, potion: true, revive: true };  // quais itens aparecem na barra
+let itemAlert = { poke_ball: 2000, ultra_ball: 2000, premier_ball: 2000, potion: 2000, revive: 500 };  // limite p/ borda vermelha (0 = sem alerta)
 let diagLines = 0;
 
 // ---- diagnóstico: captura de rede (só grava quando diagOn) ----
@@ -110,12 +112,84 @@ function checkShinyCaptures(g) {
   g._baselineDone = true;
   if (!first && dashView) for (const p of fresh) send(dashView, 'shiny-caught', { slot: g.slot, species: p.species });
 }
+// estatísticas: guarda os contadores que o jogo manda (cheios no /offline, parciais no /save)
+// + um baseline com timestamp, pra calcular as taxas da sessão (por hora).
+const STAT_NUMS = ['totalCaught', 'kills', 'shinyKills', 'money', 'trainerLevel', 'trainerXp', 'level'];
+function grabStats(g, prog) {
+  if (!prog) return;
+  const s = g._stats || (g._stats = {});
+  for (const k of STAT_NUMS) if (typeof prog[k] === 'number') s[k] = prog[k];
+  if (Array.isArray(prog.caughtSpecies)) s.species = prog.caughtSpecies.length;
+  if (Array.isArray(prog.caughtShinySpecies)) s.shinySpecies = prog.caughtShinySpecies.length;
+  if (prog.ballsSinceCapture && typeof prog.ballsSinceCapture === 'object') s.ballsSince = prog.ballsSinceCapture;
+  // espécie da hunt atual: o wilds traz a grafia exata (ex. "MrMime"), melhor que derivar do huntId
+  if (Array.isArray(prog.wilds) && prog.wilds.length) {
+    const w = prog.wilds.find(x => x && (x.spawnSpecies || x.species));
+    if (w) s.huntSpecies = w.spawnSpecies || w.species;
+  }
+  // baseline da sessão: 1ª leitura vira a referência pras taxas /h
+  if (!g._statBase && s.kills != null) g._statBase = { ts: Date.now(), totalCaught: s.totalCaught, kills: s.kills, shinyKills: s.shinyKills, money: s.money };
+  // baseline da HUNT: zera sempre que a hunt muda, pra medir só a caçada atual
+  if (s.kills != null && (!g._huntBase || g._huntBase.huntId !== g.hunt)) {
+    g._huntBase = { huntId: g.hunt, ts: Date.now(), totalCaught: s.totalCaught, kills: s.kills, shinyKills: s.shinyKills };
+  }
+  accumulateHuntLog(g, prog, s);
+}
+
+// ---- histórico acumulado por espécie (persiste em disco; soma todas as contas) ----
+// As bolas são agrupadas por chance de captura: Poke de um lado, Ultra+Premier do outro.
+const BALL_A = ['poke_ball'], BALL_B = ['ultra_ball', 'premier_ball'];
+const MAX_GAP_MS = 60000;   // pausa maior que isso não conta como tempo de caçada
+let huntLog = {}, huntLogDirty = false;
+
+function sumBalls(bag, keys) { let n = 0; for (const k of keys) n += (bag && bag[k]) || 0; return n; }
+function huntEntry(sp) {
+  return huntLog[sp] || (huntLog[sp] = { ms: 0, kills: 0, caught: 0, shinies: 0, thrownA: 0, thrownB: 0, caughtA: 0, caughtB: 0, updated: 0 });
+}
+function accumulateHuntLog(g, prog, s) {
+  const sp = s.huntSpecies;
+  const prev = g._accPrev;
+  const now = Date.now();
+  const cur = { ts: now, species: sp, kills: s.kills, caught: s.totalCaught, shinies: s.shinyKills,
+                ballA: prog.bag ? sumBalls(prog.bag, BALL_A) : null, ballB: prog.bag ? sumBalls(prog.bag, BALL_B) : null };
+  g._accPrev = cur;
+  if (!sp || !prev || prev.species !== sp) return;   // trocou de hunt (ou 1ª leitura): só reinicia a referência
+
+  const e = huntEntry(sp);
+  const gap = now - prev.ts;
+  if (gap > 0 && gap < MAX_GAP_MS) e.ms += gap;
+
+  const dKills = (cur.kills != null && prev.kills != null) ? Math.max(cur.kills - prev.kills, 0) : 0;
+  const dCaught = (cur.caught != null && prev.caught != null) ? Math.max(cur.caught - prev.caught, 0) : 0;
+  const dShiny = (cur.shinies != null && prev.shinies != null) ? Math.max(cur.shinies - prev.shinies, 0) : 0;
+  e.kills += dKills; e.caught += dCaught; e.shinies += dShiny;
+
+  // bolas: só QUEDA conta como lançamento (aumento é drop/compra)
+  const tA = (cur.ballA != null && prev.ballA != null) ? Math.max(prev.ballA - cur.ballA, 0) : 0;
+  const tB = (cur.ballB != null && prev.ballB != null) ? Math.max(prev.ballB - cur.ballB, 0) : 0;
+  e.thrownA += tA; e.thrownB += tB;
+  // atribui as capturas ao grupo que gastou bola na janela (se os dois gastaram, divide proporcional)
+  if (dCaught && (tA || tB)) {
+    if (!tA) e.caughtB += dCaught;
+    else if (!tB) e.caughtA += dCaught;
+    else { const a = dCaught * tA / (tA + tB); e.caughtA += a; e.caughtB += dCaught - a; }
+  }
+  if (dKills || dCaught || dShiny || tA || tB) { e.updated = now; huntLogDirty = true; }
+}
+function loadHuntLog() {
+  try { const j = JSON.parse(fs.readFileSync(HUNTLOG_FILE, 'utf8')); if (j && typeof j === 'object') huntLog = j; } catch { huntLog = {}; }
+}
+function saveHuntLog() {
+  if (!huntLogDirty || !HUNTLOG_FILE) return;
+  try { fs.writeFileSync(HUNTLOG_FILE, JSON.stringify(huntLog)); huntLogDirty = false; } catch {}
+}
 function applyState(g, state) {   // estado COMPLETO (/offline ou /save cheio): guarda o box e o ativo
   if (!state) return false;
   const prog = state.progress || state;
   let changed = false;
   if (state.huntId != null && state.huntId !== g.hunt) { g.hunt = state.huntId; changed = true; }
   if (Array.isArray(prog.box)) rebuildBox(g, prog.box);
+  grabStats(g, prog);
   if (prog.bag && typeof prog.bag === 'object') g._bag = prog.bag;   // mochila (item -> qtd); vem cheia
   if (prog.money != null) g._money = prog.money;
   if (Array.isArray(prog.party)) g._party = prog.party.slice();
@@ -129,6 +203,7 @@ function applyPatch(g, patch) {   // delta descomprimido: campos que MUDARAM (ac
   const prog = patch.progress || {};
   if (Array.isArray(prog.box)) rebuildBox(g, prog.box);   // captura online reenvia o box inteiro aqui
   else if (patch.boxDelta && g._box) for (const uid in patch.boxDelta) { const d = patch.boxDelta[uid], e = g._box[uid]; if (e && d) { if (d.level != null) e.level = d.level; if (d.xp != null) e.xp = d.xp; } }
+  grabStats(g, prog);
   if (prog.bag && typeof prog.bag === 'object') g._bag = prog.bag;   // o /save reenvia a bag inteira quando ela muda
   if (prog.money != null) g._money = prog.money;
   if (Array.isArray(prog.party)) g._party = prog.party.slice();
@@ -483,10 +558,11 @@ function loadSettings() {
     if (typeof j.soundVolume === 'number') soundVolume = Math.max(0, Math.min(1, j.soundVolume));
     soundPath = (typeof j.soundPath === 'string' && j.soundPath) ? j.soundPath : null;
     if (j.itemVis && typeof j.itemVis === 'object') for (const k in itemVis) itemVis[k] = j.itemVis[k] !== false;
+    if (j.itemAlert && typeof j.itemAlert === 'object') for (const k in itemAlert) { const n = Number(j.itemAlert[k]); if (Number.isFinite(n) && n >= 0) itemAlert[k] = Math.round(n); }
   } catch { soundEnabled = true; soundVolume = 0.8; soundPath = null; }
 }
-function saveSettings() { try { if (SETTINGS_FILE) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ soundEnabled, soundVolume, soundPath, itemVis })); } catch {} }
-function pushItemVis() { if (dashView) send(dashView, 'item-config', itemVis); }
+function saveSettings() { try { if (SETTINGS_FILE) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ soundEnabled, soundVolume, soundPath, itemVis, itemAlert })); } catch {} }
+function pushItemConfig() { if (dashView) send(dashView, 'item-config', { vis: itemVis, alert: itemAlert }); }
 
 // ---- som (shiny capturado) ----
 const DEFAULT_SOUND = path.join(__dirname, 'sounds', 'shiny-default.mp3');
@@ -508,7 +584,10 @@ function createWindow() {
   DUMP_FILE = path.join(app.getPath('userData'), 'ws-dump.jsonl');
   SESSION_FILE = path.join(app.getPath('userData'), 'session.json');
   SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
+  HUNTLOG_FILE = path.join(app.getPath('userData'), 'huntlog.json');
   loadSettings();
+  loadHuntLog();
+  setInterval(saveHuntLog, 30000);   // grava o histórico de tempos em tempos (só se mudou)
 
   win = new BaseWindow({
     width: 1400, height: 860,
@@ -624,9 +703,69 @@ ipcMain.handle('pickSoundFile', async () => {
 });
 ipcMain.handle('resetSound', () => { soundPath = null; saveSettings(); pushSoundConfig(); return { name: soundName(), custom: false }; });
 
-// ---- visibilidade dos itens na barra ----
+// stats da CAÇADA atual: o jogo não manda contador por hunt, então medimos o delta
+// desde que a hunt começou (ou desde que o launcher passou a observar, o que vier depois).
+function huntStats(g) {
+  const s = g._stats || {}, b = g._huntBase;
+  if (!b) return null;
+  const sp = s.huntSpecies || null;
+  const d = (k) => (s[k] != null && b[k] != null) ? Math.max(s[k] - b[k], 0) : 0;
+  const kills = d('kills'), caught = d('totalCaught'), shinies = d('shinyKills');
+  return {
+    id: g.hunt || null,
+    species: sp,
+    kills, caught, shinies,
+    ms: Date.now() - b.ts,
+    catchRate: kills ? Math.round(caught / kills * 1000) / 10 : null,
+    shinyRatio: shinies ? Math.round(kills / shinies) : null,
+    ballsSince: (sp && s.ballsSince) ? (s.ballsSince[sp] || 0) : null,   // bolas gastas sem capturar essa espécie
+  };
+}
+
+// ---- estatísticas por conta (totais do jogo + taxas desta sessão) ----
+ipcMain.handle('getStats', () => games.map(g => {
+  const s = g._stats || {}, b = g._statBase;
+  const elapsed = b ? Math.max((Date.now() - b.ts) / 3600000, 0) : 0;   // horas desde o baseline
+  const rate = (k) => (b && elapsed > 0.0015 && s[k] != null && b[k] != null) ? Math.round((s[k] - b[k]) / elapsed) : null;  // só depois de ~5s
+  return {
+    slot: g.slot,
+    name: g.charName || ('Tela ' + g.slot),
+    caught: s.totalCaught != null ? s.totalCaught : null,
+    kills: s.kills != null ? s.kills : null,
+    shinies: s.shinyKills != null ? s.shinyKills : null,
+    money: s.money != null ? s.money : null,
+    species: s.species != null ? s.species : null,
+    shinySpecies: s.shinySpecies != null ? s.shinySpecies : null,
+    trainerLevel: s.trainerLevel != null ? s.trainerLevel : null,
+    activeLevel: s.level != null ? s.level : null,
+    catchRate: (s.totalCaught != null && s.kills) ? Math.round(s.totalCaught / s.kills * 1000) / 10 : null,   // % dos encontros que viraram captura
+    hunt: huntStats(g),
+    sessionMs: b ? (Date.now() - b.ts) : 0,
+    perHour: { caught: rate('totalCaught'), kills: rate('kills'), shinies: rate('shinyKills'), money: rate('money') },
+  };
+}));
+
+// histórico acumulado de uma espécie (ou de todas, se species vier vazio)
+// junta o streak AO VIVO (ballsSinceCapture) que o jogo mantém por conta.
+ipcMain.handle('getHuntLog', (_e, species) => {
+  saveHuntLog();
+  if (!species) return huntLog;
+  const d = Object.assign({}, huntLog[species] || null);
+  const streaks = [];
+  for (const g of games) {
+    const s = g._stats || {};
+    const n = s.ballsSince ? s.ballsSince[species] : null;
+    if (n != null) streaks.push({ name: g.charName || ('Tela ' + g.slot), balls: n, hunting: s.huntSpecies === species });
+  }
+  d.streaks = streaks;
+  return (huntLog[species] || streaks.length) ? d : null;
+});
+
+// ---- visibilidade dos itens na barra + alerta de item baixo ----
 ipcMain.handle('getItemVis', () => itemVis);
-ipcMain.handle('setItemVis', (_e, key, on) => { if (key in itemVis) { itemVis[key] = !!on; saveSettings(); pushItemVis(); } return itemVis; });
+ipcMain.handle('setItemVis', (_e, key, on) => { if (key in itemVis) { itemVis[key] = !!on; saveSettings(); pushItemConfig(); } return itemVis; });
+ipcMain.handle('getItemAlert', () => itemAlert);
+ipcMain.handle('setItemAlert', (_e, key, val) => { if (key in itemAlert) { const n = Number(val); itemAlert[key] = (Number.isFinite(n) && n >= 0) ? Math.round(n) : 0; saveSettings(); pushItemConfig(); } return itemAlert; });
 ipcMain.handle('testSound', () => { if (dashView) send(dashView, 'play-sound', { dataUrl: soundDataUrl(), volume: soundVolume }); });
 
 // ---- auto-update (via GitHub Releases) ----
@@ -692,8 +831,9 @@ function setupAutoUpdate() {
 app.whenReady().then(() => {
   createWindow();
   // espera a UI carregar antes de checar (pra não perder os eventos de status)
-  dashView.webContents.once('did-finish-load', () => { setTimeout(setupAutoUpdate, 1500); pushSoundConfig(); pushItemVis(); });
+  dashView.webContents.once('did-finish-load', () => { setTimeout(setupAutoUpdate, 1500); pushSoundConfig(); pushItemConfig(); });
   app.on('activate', () => { if (BaseWindow.getAllWindows().length === 0) createWindow(); });
 });
 
+app.on('before-quit', () => { saveHuntLog(); });   // não perde o histórico acumulado ao fechar
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

@@ -21,6 +21,9 @@
   .sep{ border-top:1px solid var(--line2); margin:12px 0 10px; }
   .chk{ display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--txt); margin-bottom:9px; cursor:pointer; }
   .chk input{ cursor:pointer; }
+  .alr-row{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:7px; font-size:11.5px; color:var(--txt); }
+  .alr-row input{ width:82px; background:var(--panel2); color:var(--txt); border:1px solid var(--line2); border-radius:6px; padding:3px 7px; font-size:11.5px; outline:none; }
+  .alr-row input:focus{ border-color:var(--gold); }
   .cl-panel{ position:absolute; inset:0; background:var(--bg); border:1px solid var(--line2); border-radius:12px; padding:12px; display:none; flex-direction:column; }
   .cl-panel.show{ display:flex; }
   .cl-body{ flex:1; overflow-y:auto; margin-top:4px; }
@@ -78,6 +81,14 @@
       <label class="chk"><input type="checkbox" data-item="potion"> Potion</label>
       <label class="chk"><input type="checkbox" data-item="revive"> Revive</label>
       <div class="status">Desmarque tudo para esconder os itens por completo.</div>
+
+      <div class="sep"></div>
+      <div class="row" style="margin-bottom:10px"><b>Alerta de item baixo</b><br>Se um item (visivel) ficar abaixo do valor, a tela fica com <b style="color:#ff6b6f">borda vermelha</b>. Use 0 para desligar.</div>
+      <div class="alr-row"><span>Poke Ball</span><input type="number" min="0" step="100" data-alert="poke_ball"></div>
+      <div class="alr-row"><span>Ultra Ball</span><input type="number" min="0" step="100" data-alert="ultra_ball"></div>
+      <div class="alr-row"><span>Premier Ball</span><input type="number" min="0" step="100" data-alert="premier_ball"></div>
+      <div class="alr-row"><span>Potion</span><input type="number" min="0" step="100" data-alert="potion"></div>
+      <div class="alr-row"><span>Revive</span><input type="number" min="0" step="100" data-alert="revive"></div>
     </div>
   </div>
 <script>
@@ -139,12 +150,15 @@
   // ---- itens na barra (mostrar/esconder cada um) ----
   const items = document.getElementById('items');
   const itemChks = document.querySelectorAll('#items input[data-item]');
+  const alrInputs = document.querySelectorAll('#items input[data-alert]');
   document.getElementById('items-btn').onclick = function(){
     items.classList.add('show');
     if (P && P.getItemVis) P.getItemVis().then(function(v){ v = v || {}; itemChks.forEach(function(c){ c.checked = v[c.dataset.item] !== false; }); });
+    if (P && P.getItemAlert) P.getItemAlert().then(function(a){ a = a || {}; alrInputs.forEach(function(i){ i.value = a[i.dataset.alert] != null ? a[i.dataset.alert] : 2000; }); });
   };
   document.getElementById('itm-back').onclick = function(){ items.classList.remove('show'); };
   itemChks.forEach(function(c){ c.onchange = function(){ if (P && P.setItemVis) P.setItemVis(c.dataset.item, c.checked); }; });
+  alrInputs.forEach(function(i){ i.onchange = function(){ const n = Math.max(0, parseInt(i.value, 10) || 0); i.value = n; if (P && P.setItemAlert) P.setItemAlert(i.dataset.alert, n); }; });
 
   // ---- novidades (changelog) ----
   function esc(s){ return String(s==null?'':s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
