@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.6.1",
+    "date": "2026-08-07",
+    "changes": [
+      "O hub de cacada ficou mais direto: agora fala em encontros e tentativas no lugar de derrotados, e mostra 1 a cada N no lugar de porcentagens dificeis de ler (1 a cada 260 encontros em vez de 0,384%)",
+      "Tirados quatro numeros que estavam repetidos com nomes diferentes: bolas por hora era igual a encontros por hora, bolas por captura era o mesmo que 1 a cada N tentativas, bolas por derrotado era sempre 1, e bolas desde o ultimo shiny repetia a linha de cima",
+      "Shinies capturados agora mostra dos quantos que apareceram, em vez de so um numero solto"
+    ]
+  },
+  {
     "version": "1.6.0",
     "date": "2026-08-06",
     "changes": [

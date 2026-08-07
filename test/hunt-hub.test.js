@@ -58,9 +58,13 @@ test('hub usa somente o histórico observado pelo launcher', () => {
     bestiary: { kills: 46000, caught: 0, shinyKills: 9999 },
     community: community(),
   }, false);
-  assert.match(output, /Derrotados/);
+  assert.match(output, /Encontros/);
   assert.match(output, /Shinies capturados/);
-  assert.match(output, /1,50% por derrotado/);
+  assert.match(output, /1 a cada 67 encontros/);          // 800 encontros / 12 shinies
+  assert.match(output, /1 a cada 80 tentativas/);         // 800 encontros / 10 capturas
+  assert.match(output, /1,50%/);
+  assert.doesNotMatch(output, /derrotado/i);              // unidade antiga não volta
+  assert.doesNotMatch(output, /Bolas por hora|Bolas por captura|Bolas por derrotado/);   // linhas duplicadas
   assert.match(output, /No começo, a amostra pode vir somente desta instalação/);
   assert.doesNotMatch(output, /Histórico do jogo|46\.000|9\.999|bestiário/i);
 });
@@ -79,8 +83,8 @@ test('hub mantém evento comunitário fracionário visível após ponderação',
 
 test('hub não transforma ausência de denominador em taxa zero', () => {
   const output = renderHub('MrMime', { kills: 100, caught: 0, thrownA: 100 }, false);
-  assert.match(output, /Bolas por captura<\/span><span class="mv">—/);
-  assert.doesNotMatch(output, /Bolas por captura<\/span><span class="mv">0/);
+  assert.match(output, /nenhum em 100 tentativas/);   // sem captura ainda: diz isso, não "1 a cada 0"
+  assert.doesNotMatch(output, /1 a cada 0 /);
 });
 
 test('hub omite ritmo por hora em amostra curta e preserva raridades extremas', () => {
@@ -100,7 +104,7 @@ test('hub mantém contagem ponderada rara abaixo de um décimo', () => {
 
 test('amostra comunitária não se apresenta como histórico pessoal', () => {
   const output = renderHub('MrMime', { community: community() }, false);
-  assert.match(output, /Derrotados<\/div><div class="n">—/);
+  assert.match(output, /Encontros<\/div><div class="n">—/);
   assert.match(output, /Amostra da comunidade/);
 });
 

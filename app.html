@@ -621,8 +621,8 @@
   function observedRatio(total, events, unit){
     const t = numVal(total), e = numVal(events);
     if (!t) return '—';
-    if (!e) return 'nenhum em ' + fmtInt(Math.round(t));
-    return '1 em ' + fmtInt(Math.round(t / e)) + ' ' + unit;
+    if (!e) return 'nenhum em ' + fmtInt(Math.round(t)) + ' ' + unit;
+    return '1 a cada ' + fmtInt(Math.round(t / e)) + ' ' + unit;
   }
   function huntHubHTML(sp, d, loadError){
     d = d || {};
@@ -674,17 +674,16 @@
     }
 
     const kpis = '<div class="hl-kpis">'
-      + huntKpi('Derrotados', hasLocal ? fmtInt(local.kills) : '—', hasLocal ? 'nesta base' : 'sem histórico')
-      + huntKpi('Capturas', hasLocal ? fmtInt(local.caught) : '—', local.kills ? huntPct(localM.catchPct)+' por derrotado' : 'sem histórico')
-      + huntKpi('Shinies', hasLocal ? fmtInt(local.shinies) : '—', local.kills ? huntPct(localM.shinyPct)+' por derrotado' : 'sem histórico', 'gold')
+      + huntKpi('Encontros', hasLocal ? fmtInt(local.kills) : '—', hasLocal ? 'vistos pelo launcher' : 'sem histórico')
+      + huntKpi('Capturas', hasLocal ? fmtInt(local.caught) : '—', local.kills ? observedRatio(local.kills, local.caught, 'tentativas') : 'sem histórico')
+      + huntKpi('Shinies vistos', hasLocal ? fmtInt(local.shinies) : '—', local.kills ? observedRatio(local.kills, local.shinies, 'encontros') : 'sem histórico', 'gold')
       + huntKpi('Tempo de hunt', hasLocal ? fmtDur(local.ms) : '—', hasLocal ? 'somado entre contas' : 'sem histórico')
       + '</div>';
 
     const live = local.captureDryBalls !== null || local.dryKills !== null || local.dryBalls !== null
       ? '<div class="hl-section"><div class="hl-section-title">Sequências atuais <small>desde o último evento ou início desta base</small></div><div class="hl-live-grid">'
-        + (local.captureDryBalls !== null ? '<div class="hl-live"><span class="dot"></span><span class="who">Sem capturar</span><span class="value">'+fmtInt(local.captureDryBalls)+' bolas</span></div>' : '')
-        + (local.dryKills !== null ? '<div class="hl-live"><span class="dot"></span><span class="who">Desde o último shiny</span><span class="value">'+fmtInt(local.dryKills)+' derrotados</span></div>' : '')
-        + (local.dryBalls !== null ? '<div class="hl-live"><span class="dot"></span><span class="who">Bolas desde o último shiny</span><span class="value">'+fmtInt(local.dryBalls)+' bolas</span></div>' : '')
+        + (local.captureDryBalls !== null ? '<div class="hl-live"><span class="dot"></span><span class="who">Sem capturar</span><span class="value">'+fmtInt(local.captureDryBalls)+' tentativas</span></div>' : '')
+        + (local.dryKills !== null ? '<div class="hl-live"><span class="dot"></span><span class="who">Sem shiny</span><span class="value">'+fmtInt(local.dryKills)+' encontros</span></div>' : '')
         + '</div></div>' : '';
 
     let tracked = '';
@@ -695,21 +694,19 @@
       const missingKills = Math.max(0, 100 - local.kills);
       const shortParts = [];
       if (missingMinutes) shortParts.push('cerca de '+missingMinutes+' min');
-      if (missingKills) shortParts.push(missingKills+' derrotados');
+      if (missingKills) shortParts.push(missingKills+' encontros');
       tracked = '<div class="hl-section"><div class="hl-section-title">Resumo da hunt <small>histórico registrado pelo launcher</small></div><div class="hl-grid">'
         + '<div class="hl-panel"><div class="pt">Ritmo <span class="big">'+fmtDur(local.ms)+'</span></div>'
-          + huntMetric('Derrotados por hora', enoughLocalRate ? huntDec(localM.perHour.kills, 0) : '—')
+          + huntMetric('Encontros por hora', enoughLocalRate ? huntDec(localM.perHour.kills, 0) : '—')
           + huntMetric('Capturas por hora', enoughLocalRate ? huntDec(localM.perHour.caught, 1) : '—')
           + huntMetric('Shinies por hora', enoughLocalRate ? huntDec(localM.perHour.shinies, 2) : '—', 'gold')
-          + huntMetric('Bolas por hora', enoughLocalRate ? huntDec(localM.perHour.thrown, 0) : '—')
         + '</div>'
         + '<div class="hl-panel"><div class="pt">Frequências <span class="big">'+huntPct(localM.catchPct)+'</span></div>'
-          + huntMetric('Captura', observedRatio(local.kills, local.caught, 'derrotados'))
-          + huntMetric('Shiny encontrado', observedRatio(local.kills, local.shinies, 'derrotados'), 'gold', huntPct(localM.shinyPct)+' na hunt')
-          + huntMetric('Shinies capturados', fmtInt(local.shinyCaught), 'gold', 'confirmados pela Box')
-          + huntMetric('Bolas por captura', huntDec(localM.ballsPerCatch, 1))
-          + huntMetric('Bolas por derrotado', huntDec(localM.ballsPerEncounter, 2))
+          + huntMetric('Captura', observedRatio(local.kills, local.caught, 'tentativas'), '', huntPct(localM.catchPct))
+          + huntMetric('Shiny aparecer', observedRatio(local.kills, local.shinies, 'encontros'), 'gold', huntPct(localM.shinyPct))
+          + huntMetric('Shinies capturados', fmtInt(local.shinyCaught), 'gold', 'dos ' + fmtInt(local.shinies) + ' que apareceram')
         + '</div></div>'
+        + '<div class="hl-sample-note">O jogo joga 1 bola por encontro, então cada encontro é uma tentativa de captura.</div>'
         + (!enoughLocalRate ? '<div class="hl-sample-note">Amostra curta para ritmos por hora'+(shortParts.length ? ': faltam '+shortParts.join(' e ')+'.' : '.')+'</div>' : '')
         + (coverage !== null && coverage < 99.9 ? '<div class="hl-sample-note">Atribuição por tipo de bola disponível para '+huntPct(coverage)+' das capturas.</div>' : '')
       + '</div>';
@@ -733,11 +730,11 @@
       const value = function(v, formatter){ return v != null && v !== '' && Number.isFinite(Number(v)) ? formatter(v) : '—'; };
       shared = '<div class="hl-section"><div class="hl-section-title">Amostra da comunidade <small>'+contributorsTxt(cm.contributors)+'</small></div><div class="hl-compare">'
         + '<div class="hl-compare-row head"><span>Métrica</span><span>Sua hunt</span><span>Comunidade</span></div>'
-        + '<div class="hl-compare-row"><span class="label">Capturas por derrotado</span><span class="value">'+(hasLocal ? huntPct(localM.catchPct) : '—')+'</span><span class="value community">'+huntPct(cmM.catchPct)+'</span></div>'
-        + '<div class="hl-compare-row"><span class="label">Shinies por derrotado</span><span class="value">'+(hasLocal ? huntPct(localM.shinyPct) : '—')+'</span><span class="value community">'+huntPct(cmM.shinyPct)+'</span></div>'
-        + '<div class="hl-compare-row"><span class="label">Derrotados por hora</span><span class="value">'+(local.ms ? (enoughLocalRate ? value(localM.perHour.kills, function(v){ return huntDec(v,0); }) : 'amostra curta') : '—')+'</span><span class="value community">'+(cm.ms ? (enoughCommunityRate ? value(cmM.perHour.kills, function(v){ return huntDec(v,0); }) : 'amostra curta') : '—')+'</span></div>'
-        + '<div class="hl-compare-row"><span class="label">Bolas por captura</span><span class="value">'+(hasLocal ? value(localM.ballsPerCatch, function(v){ return huntDec(v,1); }) : '—')+'</span><span class="value community">'+value(cmM.ballsPerCatch, function(v){ return huntDec(v,1); })+'</span></div>'
-      + '</div><div class="hl-sample-note">Base de '+huntApprox(cm.kills)+' derrotados. '+(cm.contributors <= 1 ? 'No começo, a amostra pode vir somente desta instalação.' : 'A comunidade pode incluir os seus próprios dados se o compartilhamento estiver ativo.')+'</div></div>';
+        + '<div class="hl-compare-row"><span class="label">Taxa de captura</span><span class="value">'+(hasLocal ? huntPct(localM.catchPct) : '—')+'</span><span class="value community">'+huntPct(cmM.catchPct)+'</span></div>'
+        + '<div class="hl-compare-row"><span class="label">Taxa de shiny</span><span class="value">'+(hasLocal ? huntPct(localM.shinyPct) : '—')+'</span><span class="value community">'+huntPct(cmM.shinyPct)+'</span></div>'
+        + '<div class="hl-compare-row"><span class="label">Encontros por hora</span><span class="value">'+(local.ms ? (enoughLocalRate ? value(localM.perHour.kills, function(v){ return huntDec(v,0); }) : 'amostra curta') : '—')+'</span><span class="value community">'+(cm.ms ? (enoughCommunityRate ? value(cmM.perHour.kills, function(v){ return huntDec(v,0); }) : 'amostra curta') : '—')+'</span></div>'
+        + '<div class="hl-compare-row"><span class="label">Tentativas por captura</span><span class="value">'+(hasLocal ? value(localM.ballsPerCatch, function(v){ return huntDec(v,1); }) : '—')+'</span><span class="value community">'+value(cmM.ballsPerCatch, function(v){ return huntDec(v,1); })+'</span></div>'
+      + '</div><div class="hl-sample-note">Base de '+huntApprox(cm.kills)+' encontros. '+(cm.contributors <= 1 ? 'No começo, a amostra pode vir somente desta instalação.' : 'A comunidade pode incluir os seus próprios dados se o compartilhamento estiver ativo.')+'</div></div>';
     } else if (hasLocal) {
       shared = '<div class="hl-section"><div class="hl-section-title">Amostra da comunidade</div><div class="hl-empty local">'
         + (communityError ? 'A amostra não pôde ser consultada agora. Reabra o hub em instantes para tentar novamente.' : 'A comunidade ainda está formando uma amostra para esta espécie.')
