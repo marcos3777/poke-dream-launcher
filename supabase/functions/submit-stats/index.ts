@@ -2,15 +2,30 @@ import { withSupabase } from "npm:@supabase/server@1.4.1";
 
 const MAX_BODY_BYTES = 512 * 1024;
 const MAX_SPECIES = 300;
+const MAX_ACCOUNTS = 32;
 const MAX_COUNTER = 1_000_000_000;
 const MAX_HUNT_MS = 630_720_000_000;
 const SPECIES_PATTERN = /^[A-Z][A-Za-z0-9]{0,31}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43,128}$/;
+const ACCOUNT_ID_PATTERN = /^[0-9a-f]{64}$/;
+const LEGACY_STAT_KEYS = [
+  "kills",
+  "caught",
+  "shinies",
+  "thrown_a",
+  "thrown_b",
+  "caught_a",
+  "caught_b",
+  "ms",
+] as const;
 const STAT_KEYS = [
   "kills",
   "caught",
   "shinies",
+  "shiny_caught",
+  "broke_max",
+  "broke_min",
   "thrown_a",
   "thrown_b",
   "caught_a",
@@ -65,6 +80,52 @@ function isSafeDecimal(value: unknown): value is number {
     && value <= MAX_COUNTER;
 }
 
+function validateStatEntry(entry: unknown, accountLevel: boolean): void {
+  const expectedKeys = accountLevel ? STAT_KEYS : LEGACY_STAT_KEYS;
+  if (!isRecord(entry) || !hasExactKeys(entry, expectedKeys)) {
+    throw new RequestError(400, "invalid_submission");
+  }
+
+  const { kills, caught, shinies, thrown_a, thrown_b, caught_a, caught_b, ms } = entry;
+  if (!isSafeCounter(kills, 1)
+    || !isSafeCounter(caught)
+    || !isSafeCounter(shinies)
+    || !isSafeCounter(thrown_a)
+    || !isSafeCounter(thrown_b)
+    || !isSafeDecimal(caught_a)
+    || !isSafeDecimal(caught_b)
+    || typeof ms !== "number"
+    || !Number.isSafeInteger(ms)
+    || ms < 0
+    || ms > MAX_HUNT_MS) {
+    throw new RequestError(400, "invalid_submission");
+  }
+
+  if (caught > kills
+    || shinies > kills
+    || caught > thrown_a + thrown_b
+    || caught_a > thrown_a
+    || caught_b > thrown_b
+    || caught_a + caught_b > caught + 0.000001) {
+    throw new RequestError(400, "invalid_submission");
+  }
+
+  if (!accountLevel) return;
+  const { shiny_caught, broke_max, broke_min } = entry;
+  const validNullableBroke = (value: unknown) => value === null || isSafeCounter(value, 1);
+  if (!isSafeCounter(shiny_caught)
+    || shiny_caught > shinies
+    || shiny_caught > caught
+    || !validNullableBroke(broke_max)
+    || !validNullableBroke(broke_min)
+    || ((broke_max === null) !== (broke_min === null))
+    || (shiny_caught === 0 && (broke_max !== null || broke_min !== null))
+    || (typeof broke_max === "number" && typeof broke_min === "number"
+      && (broke_min > broke_max || broke_max > shinies))) {
+    throw new RequestError(400, "invalid_submission");
+  }
+}
+
 async function readLimitedJson(req: Request): Promise<unknown> {
   const declaredLength = req.headers.get("content-length");
   if (declaredLength !== null) {
@@ -116,7 +177,7 @@ function validatePayload(body: unknown): {
   revision: number;
   schemaVersion: number;
   appVersion: string;
-  stats: Record<string, Record<string, unknown>>;
+  stats: Record<string, unknown>;
 } {
   if (!isRecord(body) || !hasExactKeys(body, [
     "schema_version",
@@ -145,7 +206,7 @@ function validatePayload(body: unknown): {
   if (!Number.isSafeInteger(revision) || (revision as number) < 1) {
     throw new RequestError(400, "invalid_submission");
   }
-  if (schemaVersion !== 1
+  if ((schemaVersion !== 1 && schemaVersion !== 2)
     || typeof appVersion !== "string"
     || !/^[A-Za-z0-9][A-Za-z0-9._+-]{0,31}$/.test(appVersion)) {
     throw new RequestError(400, "invalid_submission");
@@ -154,39 +215,30 @@ function validatePayload(body: unknown): {
     throw new RequestError(400, "invalid_submission");
   }
 
-  const speciesNames = Object.keys(stats);
-  if (speciesNames.length > MAX_SPECIES) {
-    throw new RequestError(400, "invalid_submission");
-  }
-
-  for (const species of speciesNames) {
-    const entry = stats[species];
-    if (!SPECIES_PATTERN.test(species) || !isRecord(entry) || !hasExactKeys(entry, STAT_KEYS)) {
+  if (schemaVersion === 1) {
+    const speciesNames = Object.keys(stats);
+    if (speciesNames.length > MAX_SPECIES) {
       throw new RequestError(400, "invalid_submission");
     }
-
-    const { kills, caught, shinies, thrown_a, thrown_b, caught_a, caught_b, ms } = entry;
-    if (!isSafeCounter(kills, 1)
-      || !isSafeCounter(caught)
-      || !isSafeCounter(shinies)
-      || !isSafeCounter(thrown_a)
-      || !isSafeCounter(thrown_b)
-      || !isSafeDecimal(caught_a)
-      || !isSafeDecimal(caught_b)
-      || typeof ms !== "number"
-      || !Number.isSafeInteger(ms)
-      || ms < 0
-      || ms > MAX_HUNT_MS) {
-      throw new RequestError(400, "invalid_submission");
+    for (const species of speciesNames) {
+      if (!SPECIES_PATTERN.test(species)) throw new RequestError(400, "invalid_submission");
+      validateStatEntry(stats[species], false);
     }
+  } else {
+    const accountIds = Object.keys(stats);
+    if (accountIds.length > MAX_ACCOUNTS) throw new RequestError(400, "invalid_submission");
 
-    if (caught > kills
-      || shinies > kills
-      || caught > thrown_a + thrown_b
-      || caught_a > thrown_a
-      || caught_b > thrown_b
-      || caught_a + caught_b > caught + 0.000001) {
-      throw new RequestError(400, "invalid_submission");
+    for (const accountId of accountIds) {
+      const accountStats = stats[accountId];
+      if (!ACCOUNT_ID_PATTERN.test(accountId) || !isRecord(accountStats)) {
+        throw new RequestError(400, "invalid_submission");
+      }
+      const speciesNames = Object.keys(accountStats);
+      if (speciesNames.length > MAX_SPECIES) throw new RequestError(400, "invalid_submission");
+      for (const species of speciesNames) {
+        if (!SPECIES_PATTERN.test(species)) throw new RequestError(400, "invalid_submission");
+        validateStatEntry(accountStats[species], true);
+      }
     }
   }
 
@@ -196,7 +248,7 @@ function validatePayload(body: unknown): {
     revision: revision as number,
     schemaVersion,
     appVersion,
-    stats: stats as Record<string, Record<string, unknown>>,
+    stats,
   };
 }
 

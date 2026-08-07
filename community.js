@@ -2,17 +2,19 @@
 
 const SUPABASE_URL = 'https://ddjhptkpndopbondgvlv.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_yTCUuFkmqnOSf3OmHYJZXA_FMnaPmpB';
-const COMMUNITY_SCHEMA_VERSION = 1;
+const COMMUNITY_SCHEMA_VERSION = 2;
 const COMMUNITY_PREFERENCE_VERSION = 1;
 const POSITIVE_CACHE_MS = 30 * 60 * 1000;
 const NEGATIVE_CACHE_MS = 5 * 60 * 1000;
 const DEFAULT_TIMEOUT_MS = 8000;
 const MAX_COUNTER = 1_000_000_000;
 const MAX_HUNT_MS = 630_720_000_000;
+const MAX_ACCOUNTS = 32;
 const SPECIES_RE = /^[A-Z][A-Za-z0-9]{0,31}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TOKEN_RE = /^[A-Za-z0-9_-]{43,128}$/;
 const VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,31}$/;
+const ACCOUNT_ID_RE = /^[0-9a-f]{64}$/;
 
 class CommunityHttpError extends Error {
   constructor(message, status, code, data) {
@@ -93,13 +95,84 @@ function huntLogToStats(huntLog) {
   return result;
 }
 
-function buildSubmitPayload({ appVersion, clientId, clientToken, revision, huntLog, stats }) {
+// O servidor recebe um snapshot por personagem. A callback transforma a chave local da conta
+// num identificador opaco e específico desta instalação; nome e charId nunca saem do computador.
+function huntLogToAccountStats(huntLog, accountIdForKey) {
+  const result = {};
+  if (!isRecord(huntLog) || typeof accountIdForKey !== 'function') throw new CommunitySnapshotError();
+
+  for (const species of Object.keys(huntLog).sort()) {
+    if (!SPECIES_RE.test(species)) throw new CommunitySnapshotError(species);
+    const entry = huntLog[species];
+    if (!isRecord(entry)) throw new CommunitySnapshotError(species);
+    if (entry.accounts === undefined) continue;
+    if (!isRecord(entry.accounts)) throw new CommunitySnapshotError(species);
+
+    for (const accountKey of Object.keys(entry.accounts).sort()) {
+      const account = entry.accounts[accountKey];
+      if (!isRecord(account) || !isRecord(account.stats)) continue;
+      const accountId = accountIdForKey(accountKey);
+      if (typeof accountId !== 'string' || !ACCOUNT_ID_RE.test(accountId)) throw new CommunitySnapshotError(species);
+
+      const source = account.stats;
+      const kills = safeInteger(source.kills ?? 0, 0, MAX_COUNTER);
+      const caught = safeInteger(source.caught ?? 0, 0, MAX_COUNTER);
+      const shinies = safeInteger(source.shinies ?? 0, 0, MAX_COUNTER);
+      const shinyCaught = safeInteger(source.shinyCaught ?? 0, 0, MAX_COUNTER);
+      const thrownA = safeInteger(source.thrownA ?? 0, 0, MAX_COUNTER);
+      const thrownB = safeInteger(source.thrownB ?? 0, 0, MAX_COUNTER);
+      const caughtA = safeDecimal(source.caughtA ?? 0, 0, MAX_COUNTER);
+      const caughtB = safeDecimal(source.caughtB ?? 0, 0, MAX_COUNTER);
+      const ms = safeInteger(source.ms ?? 0, 0, MAX_HUNT_MS);
+
+      if ([kills, caught, shinies, shinyCaught, thrownA, thrownB, caughtA, caughtB, ms].some((value) => value === null)) {
+        throw new CommunitySnapshotError(species);
+      }
+      if (caught > kills || shinies > kills || shinyCaught > shinies || shinyCaught > caught || caught > thrownA + thrownB) {
+        throw new CommunitySnapshotError(species);
+      }
+      if (caughtA > thrownA || caughtB > thrownB || caughtA + caughtB > caught + 0.000001) {
+        throw new CommunitySnapshotError(species);
+      }
+      if (kills === 0) continue;
+
+      const rawMax = account.brokeMax == null ? null : safeInteger(account.brokeMax, 1, MAX_COUNTER);
+      const rawMin = account.brokeMin == null ? null : safeInteger(account.brokeMin, 1, MAX_COUNTER);
+      const hasValidBroke = shinyCaught > 0
+        && rawMax !== null
+        && rawMin !== null
+        && rawMin <= rawMax
+        && rawMax <= shinies;
+
+      if (!result[accountId]) result[accountId] = {};
+      result[accountId][species] = {
+        kills,
+        caught,
+        shinies,
+        shiny_caught: shinyCaught,
+        broke_max: hasValidBroke ? rawMax : null,
+        broke_min: hasValidBroke ? rawMin : null,
+        thrown_a: thrownA,
+        thrown_b: thrownB,
+        caught_a: caughtA,
+        caught_b: caughtB,
+        ms,
+      };
+    }
+  }
+
+  if (Object.keys(result).length > MAX_ACCOUNTS) throw new CommunitySnapshotError();
+
+  return result;
+}
+
+function buildSubmitPayload({ appVersion, clientId, clientToken, revision, huntLog, stats, accountIdForKey }) {
   if (typeof appVersion !== 'string' || !VERSION_RE.test(appVersion)) throw new TypeError('invalid appVersion');
   if (typeof clientId !== 'string' || !UUID_RE.test(clientId)) throw new TypeError('invalid clientId');
   if (typeof clientToken !== 'string' || !TOKEN_RE.test(clientToken)) throw new TypeError('invalid clientToken');
   if (!Number.isSafeInteger(revision) || revision < 1) throw new TypeError('invalid revision');
 
-  const normalizedStats = stats === undefined ? huntLogToStats(huntLog) : stats;
+  const normalizedStats = stats === undefined ? huntLogToAccountStats(huntLog, accountIdForKey) : stats;
   if (!isRecord(normalizedStats)) throw new TypeError('invalid stats');
 
   return {
@@ -122,8 +195,9 @@ function parseAggregate(payload, species) {
   const integerFields = ['contributors'];
   // Contagens agregadas podem ser fracionárias porque o servidor limita o peso de uma
   // instalação muito grande antes de somá-la à amostra.
-  const numericFields = ['kills', 'caught', 'shinies', 'thrown_a', 'thrown_b', 'caught_a', 'caught_b', 'ms'];
+  const numericFields = ['kills', 'caught', 'shinies', 'shiny_caught', 'thrown_a', 'thrown_b', 'caught_a', 'caught_b', 'ms'];
   const decimalFields = ['catch_pct', 'catch_pct_a', 'catch_pct_b', 'kills_per_shiny'];
+  const nullableIntegerFields = ['broke_max', 'broke_min'];
   const result = { species };
 
   for (const key of integerFields) {
@@ -140,6 +214,12 @@ function parseAggregate(payload, species) {
     if (value[key] == null) { result[key] = null; continue; }
     const n = Number(value[key]);
     if (!Number.isFinite(n) || n < 0) throw new CommunityHttpError('invalid server response', 0, 'invalid_response');
+    result[key] = n;
+  }
+  for (const key of nullableIntegerFields) {
+    if (value[key] == null) { result[key] = null; continue; }
+    const n = Number(value[key]);
+    if (!Number.isSafeInteger(n) || n < 1) throw new CommunityHttpError('invalid server response', 0, 'invalid_response');
     result[key] = n;
   }
   return result;
@@ -259,6 +339,7 @@ module.exports = {
   CommunitySnapshotError,
   resolveShareStatsSetting,
   huntLogToStats,
+  huntLogToAccountStats,
   buildSubmitPayload,
   createCommunityClient,
 };

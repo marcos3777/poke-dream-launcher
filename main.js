@@ -6,8 +6,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 const zlib = require('zlib');
 const { autoUpdater } = require('electron-updater');
-const { COMMUNITY_PREFERENCE_VERSION, createCommunityClient, resolveShareStatsSetting } = require('./community');
-const { enqueueStateUpdate, recordObservation } = require('./hunt-metrics');
+const { COMMUNITY_PREFERENCE_VERSION, createCommunityClient, huntLogToAccountStats, resolveShareStatsSetting } = require('./community');
+const { describeBroke, enqueueStateUpdate, recordObservation } = require('./hunt-metrics');
 
 const GAME_URL = 'https://pokedream.com.br/';
 const GAME_DOMAIN = 'pokedream.com.br';
@@ -259,6 +259,8 @@ function accumulateHuntLog(g, prog, s) {
     shinyCaught: confirmedShinyCaught,
     thrownA: tA,
     thrownB: tB,
+    // o broke é uma sequência por personagem — nunca soma entre contas
+    account: { key: g._charId ? 'id:' + g._charId : 'slot:' + g.slot, name: g.charName || ('Tela ' + g.slot) },
     now,
   })) huntLogDirty = true;
 }
@@ -808,12 +810,16 @@ async function submitCommunityStats() {
   }
 
   const revision = communityRevision + 1;
+  const stats = huntLogToAccountStats(huntLog, (accountKey) => crypto
+    .createHmac('sha256', communityToken)
+    .update('community-account-v1:' + accountKey, 'utf8')
+    .digest('hex'));
   communitySubmitInFlight = communityClient.submitStats({
     appVersion: app.getVersion(),
     clientId,
     clientToken: communityToken,
     revision,
-    huntLog,
+    stats,
   }).then((result) => {
     const savedRevision = Number(result && result.revision);
     communityRevision = Number.isSafeInteger(savedRevision) && savedRevision >= revision ? savedRevision : revision;
@@ -1101,6 +1107,7 @@ ipcMain.handle('getHuntLog', async (_e, species) => {
   }
   d.huntingNow = huntingNow;
   d.mixedNow = mixedNow;
+  d.broke = describeBroke(huntLog[species]);   // sequências de shiny, separadas por personagem
   let communityWaitTimer = null;
   try {
     d.community = await Promise.race([

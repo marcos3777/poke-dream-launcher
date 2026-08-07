@@ -1,6 +1,7 @@
 node_modules/
 dist/
 *.tmp
+.superdesign/tmp/
 
 # logs de build
 *.log
@@ -11,3 +12,6 @@ dist/
 
 # documento de trabalho do backend (contem detalhes de infra)
 SUPABASE-SETUP.md
+
+# documento de trabalho do broke (detalhes de infra)
+BROKE-CHANGES.md

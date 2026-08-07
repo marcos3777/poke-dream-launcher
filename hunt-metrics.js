@@ -101,6 +101,65 @@
     return ready;
   }
 
+  function accountEntry(entry, account) {
+    const key = account && account.key ? String(account.key) : '';
+    if (!key) return null;
+    const accounts = entry.accounts && typeof entry.accounts === 'object' && !Array.isArray(entry.accounts)
+      ? entry.accounts
+      : (entry.accounts = {});
+    const acc = accounts[key] || (accounts[key] = { name: '', seen: 0, caught: 0, streak: 0, brokeMax: null, brokeMin: null });
+    if (account.name) acc.name = String(account.name);
+    return acc;
+  }
+
+  function recordCounters(target, values) {
+    const { ms, kills, caught, shinies, shinyCaught, thrownA, thrownB, thrown } = values;
+    target.ms = (finiteNonNegative(target.ms) || 0) + ms;
+    target.kills = (finiteNonNegative(target.kills) || 0) + kills;
+    target.caught = (finiteNonNegative(target.caught) || 0) + caught;
+    target.shinies = (finiteNonNegative(target.shinies) || 0) + shinies;
+    target.shinyCaught = (finiteNonNegative(target.shinyCaught) || 0) + shinyCaught;
+    target.thrownA = (finiteNonNegative(target.thrownA) || 0) + thrownA;
+    target.thrownB = (finiteNonNegative(target.thrownB) || 0) + thrownB;
+    target.caughtA = finiteNonNegative(target.caughtA) || 0;
+    target.caughtB = finiteNonNegative(target.caughtB) || 0;
+
+    if (caught) target.pend = (finiteNonNegative(target.pend) || 0) + caught;
+    if (target.pend && thrown) {
+      const pending = target.pend;
+      target.pend = 0;
+      if (!thrownA) target.caughtB = (finiteNonNegative(target.caughtB) || 0) + pending;
+      else if (!thrownB) target.caughtA = (finiteNonNegative(target.caughtA) || 0) + pending;
+      else {
+        const attributedA = pending * thrownA / thrown;
+        target.caughtA = (finiteNonNegative(target.caughtA) || 0) + attributedA;
+        target.caughtB = (finiteNonNegative(target.caughtB) || 0) + pending - attributedA;
+      }
+    }
+  }
+
+  // Broke = quantas aparições de shiny passaram até capturar um. É uma SEQUÊNCIA, então não
+  // pode somar entre contas: cada personagem tem a sua. Por isso fica num mapa por conta.
+  function recordAccountBroke(acc, shinies, shinyCaught) {
+    if (!acc) return;
+    acc.seen = (finiteNonNegative(acc.seen) || 0) + shinies;
+    acc.streak = (finiteNonNegative(acc.streak) || 0) + shinies;
+    if (!shinyCaught) return;
+    // Uma amostra por janela: se dois shinies caíssem no mesmo /save não dá pra saber a divisão,
+    // então registra a sequência corrente uma vez e zera, em vez de inventar um zero.
+    const sample = acc.streak;
+    acc.caught = (finiteNonNegative(acc.caught) || 0) + shinyCaught;
+    acc.streak = 0;
+    if (sample > 0) {
+      // atenção: finiteNonNegative(null) devolve 0, então o "sem amostra ainda" tem que ser
+      // testado antes — senão o mínimo trava em zero pra sempre.
+      const max = acc.brokeMax == null ? null : finiteNonNegative(acc.brokeMax);
+      const min = acc.brokeMin == null ? null : finiteNonNegative(acc.brokeMin);
+      acc.brokeMax = max === null ? sample : Math.max(max, sample);
+      acc.brokeMin = min === null ? sample : Math.min(min, sample);
+    }
+  }
+
   function recordObservation(entry, input) {
     if (!entry || typeof entry !== 'object') return false;
     const observation = input && typeof input === 'object' ? input : {};
@@ -113,13 +172,8 @@
     const shinyCaught = Math.min(caught, finiteNonNegative(observation.shinyCaught) || 0);
     const thrown = thrownA + thrownB;
 
-    entry.ms = (finiteNonNegative(entry.ms) || 0) + ms;
-    entry.kills = (finiteNonNegative(entry.kills) || 0) + kills;
-    entry.caught = (finiteNonNegative(entry.caught) || 0) + caught;
-    entry.shinies = (finiteNonNegative(entry.shinies) || 0) + shinies;
-    entry.shinyCaught = (finiteNonNegative(entry.shinyCaught) || 0) + shinyCaught;
-    entry.thrownA = (finiteNonNegative(entry.thrownA) || 0) + thrownA;
-    entry.thrownB = (finiteNonNegative(entry.thrownB) || 0) + thrownB;
+    const values = { ms, kills, caught, shinies, shinyCaught, thrownA, thrownB, thrown };
+    recordCounters(entry, values);
 
     entry.captureDryBalls = (finiteNonNegative(entry.captureDryBalls) || 0) + thrown;
     if (caught) entry.captureDryBalls = 0;
@@ -127,23 +181,53 @@
     entry.dryKills = (finiteNonNegative(entry.dryKills) || 0) + kills;
     if (shinies) { entry.dryBalls = 0; entry.dryKills = 0; }
 
-    if (caught) entry.pend = (finiteNonNegative(entry.pend) || 0) + caught;
-    if (entry.pend && thrown) {
-      const pending = entry.pend;
-      entry.pend = 0;
-      if (!thrownA) entry.caughtB = (finiteNonNegative(entry.caughtB) || 0) + pending;
-      else if (!thrownB) entry.caughtA = (finiteNonNegative(entry.caughtA) || 0) + pending;
-      else {
-        const attributedA = pending * thrownA / thrown;
-        entry.caughtA = (finiteNonNegative(entry.caughtA) || 0) + attributedA;
-        entry.caughtB = (finiteNonNegative(entry.caughtB) || 0) + pending - attributedA;
+    const activity = !!(kills || caught || shinies || shinyCaught || thrown);
+    if (ms || activity) {
+      const account = accountEntry(entry, observation.account);
+      if (account) {
+        const stats = account.stats && typeof account.stats === 'object' && !Array.isArray(account.stats)
+          ? account.stats
+          : (account.stats = {});
+        recordCounters(stats, values);
+        if (shinies || shinyCaught) recordAccountBroke(account, shinies, shinyCaught);
       }
     }
 
-    const activity = !!(kills || caught || shinies || shinyCaught || thrown);
     if (activity && Number.isFinite(Number(observation.now))) entry.updated = Number(observation.now);
     return !!(ms || activity);
   }
 
-  return { describe, enqueueStateUpdate, perEvent, perHour, percentage, recordObservation };
+  // agrega o broke pra exibição: por conta + o pior/melhor entre elas (nunca somando sequências)
+  function describeBroke(entry) {
+    const accounts = entry && entry.accounts && typeof entry.accounts === 'object' ? entry.accounts : null;
+    if (!accounts) return null;
+    const rows = [];
+    for (const key of Object.keys(accounts)) {
+      const a = accounts[key] || {};
+      const seen = finiteNonNegative(a.seen) || 0;
+      const caught = finiteNonNegative(a.caught) || 0;
+      if (!seen && !caught) continue;
+      rows.push({
+        key,
+        name: a.name || '',
+        seen, caught,
+        streak: finiteNonNegative(a.streak) || 0,
+        brokeMax: a.brokeMax == null ? null : finiteNonNegative(a.brokeMax),
+        brokeMin: a.brokeMin == null ? null : finiteNonNegative(a.brokeMin),
+        catchPct: percentage(caught, seen),
+      });
+    }
+    if (!rows.length) return null;
+    rows.sort((x, y) => y.seen - x.seen);
+    const maxes = rows.map((r) => r.brokeMax).filter((v) => v !== null);
+    const mins = rows.map((r) => r.brokeMin).filter((v) => v !== null);
+    return {
+      rows,
+      brokeMax: maxes.length ? Math.max(...maxes) : null,
+      brokeMin: mins.length ? Math.min(...mins) : null,
+      streak: rows.length === 1 ? rows[0].streak : null,   // só faz sentido com uma conta
+    };
+  }
+
+  return { describe, describeBroke, enqueueStateUpdate, perEvent, perHour, percentage, recordObservation };
 });

@@ -10,6 +10,7 @@ const {
   CommunityHttpError,
   CommunitySnapshotError,
   huntLogToStats,
+  huntLogToAccountStats,
   buildSubmitPayload,
   createCommunityClient,
   resolveShareStatsSetting,
@@ -50,6 +51,9 @@ function aggregate(species = 'MrMime') {
     kills: '800',
     caught: '120',
     shinies: '3',
+    shiny_caught: '1',
+    broke_max: '8',
+    broke_min: '3',
     thrown_a: '200',
     thrown_b: '600',
     caught_a: '30.25',
@@ -68,6 +72,9 @@ function weightedAggregate(species = 'MrMime') {
     kills: '10000.0',
     caught: '17.25',
     shinies: '0.1',
+    shiny_caught: '0.05',
+    broke_max: '8',
+    broke_min: '3',
     thrown_a: '51.5',
     thrown_b: '9948.5',
     caught_a: '1.25',
@@ -127,6 +134,30 @@ test('huntLogToStats rejeita o snapshot inteiro em vez de apagar uma espécie si
   }), (error) => error instanceof CommunitySnapshotError && error.species === 'nome inválido');
 });
 
+test('huntLogToAccountStats separa personagens e não envia nome nem chave bruta', () => {
+  const stats = huntLogToAccountStats({
+    MrMime: {
+      accounts: {
+        'id:123': {
+          name: 'Conta pessoal', seen: 3, caught: 1, streak: 0, brokeMax: 3, brokeMin: 3,
+          stats: { kills: 20, caught: 2, shinies: 3, shinyCaught: 1, thrownA: 5, thrownB: 15, caughtA: 0.5, caughtB: 1.5, ms: 12345 },
+        },
+        'id:456': {
+          name: 'Outra conta', seen: 1, caught: 0, streak: 1, brokeMax: null, brokeMin: null,
+          stats: { kills: 10, caught: 1, shinies: 1, shinyCaught: 0, thrownA: 4, thrownB: 6, caughtA: 0.4, caughtB: 0.6, ms: 5000 },
+        },
+      },
+    },
+  }, (key) => key === 'id:123' ? 'a'.repeat(64) : 'b'.repeat(64));
+
+  assert.deepEqual(Object.keys(stats), ['a'.repeat(64), 'b'.repeat(64)]);
+  assert.equal(stats['a'.repeat(64)].MrMime.shiny_caught, 1);
+  assert.equal(stats['a'.repeat(64)].MrMime.broke_max, 3);
+  assert.equal(stats['b'.repeat(64)].MrMime.broke_max, null);
+  assert.equal(JSON.stringify(stats).includes('Conta pessoal'), false);
+  assert.equal(JSON.stringify(stats).includes('id:123'), false);
+});
+
 test('buildSubmitPayload inclui versões, identidade e revisão', () => {
   const payload = buildSubmitPayload({
     appVersion: '1.5.2',
@@ -136,7 +167,7 @@ test('buildSubmitPayload inclui versões, identidade e revisão', () => {
     stats: {},
   });
   assert.deepEqual(payload, {
-    schema_version: 1,
+    schema_version: 2,
     app_version: '1.5.2',
     client_id: CLIENT_ID,
     client_token: CLIENT_TOKEN,
@@ -163,7 +194,7 @@ test('submitStats usa endpoint e headers públicos corretos', async () => {
   assert.equal(call.init.method, 'POST');
   assert.equal(call.init.headers.apikey, SUPABASE_PUBLISHABLE_KEY);
   assert.equal(call.init.headers['content-type'], 'application/json');
-  assert.equal(JSON.parse(call.init.body).schema_version, 1);
+  assert.equal(JSON.parse(call.init.body).schema_version, 2);
 });
 
 test('erros HTTP preservam status e código público', async () => {
@@ -213,6 +244,8 @@ test('getSpeciesStats preserva contagens ponderadas fracionárias do servidor', 
   });
   const stats = await client.getSpeciesStats('MrMime');
   assert.equal(stats.shinies, 0.1);
+  assert.equal(stats.shiny_caught, 0.05);
+  assert.equal(stats.broke_max, 8);
   assert.equal(stats.caught, 17.25);
   assert.equal(stats.thrown_a, 51.5);
   assert.equal(stats.ms, 3600000.5);

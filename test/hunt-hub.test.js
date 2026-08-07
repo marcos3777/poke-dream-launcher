@@ -59,13 +59,16 @@ test('hub usa somente o histórico observado pelo launcher', () => {
     community: community(),
   }, false);
   assert.match(output, /Encontros/);
-  assert.match(output, /Shinies capturados/);
+  assert.match(output, /hl-shiny/);                       // shiny tem seção própria
+  assert.match(output, /Capturados/);
+  assert.match(output, /Broke/);
+  assert.match(output, /class="hl-i"/);                   // explicação virou tooltip
   assert.match(output, /1 a cada 67 encontros/);          // 800 encontros / 12 shinies
   assert.match(output, /1 a cada 80 tentativas/);         // 800 encontros / 10 capturas
   assert.match(output, /1,50%/);
   assert.doesNotMatch(output, /derrotado/i);              // unidade antiga não volta
   assert.doesNotMatch(output, /Bolas por hora|Bolas por captura|Bolas por derrotado/);   // linhas duplicadas
-  assert.match(output, /No começo, a amostra pode vir somente desta instalação/);
+  assert.match(output, /No começo, a amostra pode vir somente de uma conta/);
   assert.doesNotMatch(output, /Histórico do jogo|46\.000|9\.999|bestiário/i);
 });
 
@@ -104,7 +107,7 @@ test('hub mantém contagem ponderada rara abaixo de um décimo', () => {
 
 test('amostra comunitária não se apresenta como histórico pessoal', () => {
   const output = renderHub('MrMime', { community: community() }, false);
-  assert.match(output, /Encontros<\/div><div class="n">—/);
+  assert.match(output, /Encontros <i class="hl-i"[^>]*>i<\/i><\/div><div class="n">—/);
   assert.match(output, /Amostra da comunidade/);
 });
 

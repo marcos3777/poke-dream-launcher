@@ -232,6 +232,9 @@
   .hl-badge.live{ border-color:#285a39; background:#102118; color:#66d98f; }
   .hl-badge.shared{ border-color:#3f4555; color:#b3bdcf; }
   .hl-kpis{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; margin-bottom:14px; }
+  .hl-kpis.three{ grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .hl-shiny .hl-kpis{ margin-bottom:0; }
+  .hl-shiny .hl-section-title{ color:var(--gold); }
   .hl-kpi{ min-width:0; padding:10px 10px 9px; border:1px solid var(--line); border-radius:11px; background:linear-gradient(160deg,#121824,#0e131c); }
   .hl-kpi.gold{ border-color:#4a401c; background:linear-gradient(160deg,#1a180b,#11140d); }
   .hl-kpi .k{ color:var(--mut); font-size:8.5px; font-weight:800; letter-spacing:.45px; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -271,6 +274,30 @@
   .hl-compare-row.head span{ color:#657187; font-size:8.5px; font-weight:750; text-align:right; }
   .hl-compare-row.head span:first-child{ text-align:left; }
   .hl-sample-note{ margin:7px 2px 0; color:#667288; font-size:8.8px; line-height:1.45; }
+
+  /* ⓘ no lugar de textos longos: a explicação vive no tooltip */
+  .hl-i{ display:inline-flex; align-items:center; justify-content:center; width:12px; height:12px;
+    border-radius:50%; border:1px solid #3d4a61; color:#8791a4; font-size:8px; font-weight:800;
+    font-style:normal; line-height:1; cursor:help; flex:0 0 auto; letter-spacing:0; text-transform:none; }
+  .hl-i:hover{ border-color:var(--gold); color:var(--gold); }
+
+  /* KPIs e broke centralizados */
+  .hl-kpi.mid{ text-align:center; }
+  .hl-kpi.mid .k{ display:flex; align-items:center; justify-content:center; gap:4px; }
+  .hl-broke{ margin-top:9px; padding:9px 10px; border:1px solid var(--line); border-radius:10px; background:rgba(13,17,25,.55); }
+  .hl-broke .bt{ display:flex; align-items:center; justify-content:center; gap:5px; margin-bottom:7px;
+    color:var(--mut); font-size:8.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; }
+  .hl-broke .bgrid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; text-align:center; }
+  .hl-broke .bn{ font-size:17px; font-weight:850; line-height:1.1; font-variant-numeric:tabular-nums; }
+  .hl-broke .bk{ font-size:8.5px; color:var(--mut); font-weight:700; letter-spacing:.4px; text-transform:uppercase; }
+  .hl-broke .max .bn{ color:#ff8a3d; }
+  .hl-broke .min .bn{ color:#35c46a; }
+  .hl-broke .cur .bn{ color:var(--gold); }
+  .hl-broke .bacc{ margin-top:8px; padding-top:7px; border-top:1px solid rgba(31,39,52,.7); }
+  .hl-broke .bar{ display:flex; align-items:baseline; gap:8px; font-size:9.5px; padding:2px 1px; }
+  .hl-broke .bar .an{ color:var(--txt); font-weight:700; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hl-broke .bar .av{ color:var(--mut); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .hl-broke .bar .av b{ color:var(--txt); font-weight:700; }
   .hl-ball-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
   .hl-ball-grid .hl-ball{ margin:0; }
   .hl-account-details{ margin-top:7px; border:1px solid rgba(31,39,52,.75); border-radius:9px; background:rgba(13,17,25,.42); }
@@ -574,7 +601,7 @@
   function numVal(v){ const n = Number(v); return Number.isFinite(n) ? n : 0; }
   function contributorsTxt(n){
     const value = Math.max(0, Math.round(numVal(n)));
-    return fmtInt(value) + ' instalação' + (value === 1 ? '' : 'ões');
+    return fmtInt(value) + (value === 1 ? ' conta' : ' contas');
   }
   const HM = window.HuntMetrics;
   function huntPct(value){
@@ -612,8 +639,12 @@
     if (hours < 24) return 'há ' + hours + 'h';
     return 'há ' + Math.floor(hours / 24) + 'd';
   }
-  function huntKpi(label, value, sub, cls){
-    return '<div class="hl-kpi'+(cls ? ' '+cls : '')+'"><div class="k">'+label+'</div><div class="n">'+value+'</div><div class="s">'+(sub || '')+'</div></div>';
+  // explicação vira tooltip; o texto longo sai da tela
+  function hlInfo(text){ return '<i class="hl-i" title="'+esc(text)+'">i</i>'; }
+  function huntKpi(label, value, sub, cls, info){
+    return '<div class="hl-kpi'+(cls ? ' '+cls : '')+'">'
+      + '<div class="k">'+label+(info ? ' '+hlInfo(info) : '')+'</div>'
+      + '<div class="n">'+value+'</div><div class="s">'+(sub || '')+'</div></div>';
   }
   function huntMetric(label, value, cls, sub){
     return '<div class="hl-metric"><span class="mk">'+label+'</span><span class="mv'+(cls ? ' '+cls : '')+'">'+value+(sub ? '<small>'+sub+'</small>' : '')+'</span></div>';
@@ -673,15 +704,49 @@
           : 'Ainda não há histórico para <b>'+esc(sp)+'</b>. Deixe o launcher aberto durante uma hunt exclusiva desta espécie e os números começarão a aparecer.'))+'</div>';
     }
 
-    const kpis = '<div class="hl-kpis">'
-      + huntKpi('Encontros', hasLocal ? fmtInt(local.kills) : '—', hasLocal ? 'vistos pelo launcher' : 'sem histórico')
+    const kpis = '<div class="hl-kpis three">'
+      + huntKpi('Encontros', hasLocal ? fmtInt(local.kills) : '—', hasLocal ? 'vistos pelo launcher' : 'sem histórico', '',
+          'Cada encontro gasta uma bola, então todo encontro é uma tentativa de captura.')
       + huntKpi('Capturas', hasLocal ? fmtInt(local.caught) : '—', local.kills ? observedRatio(local.kills, local.caught, 'tentativas') : 'sem histórico')
-      + huntKpi('Shinies vistos', hasLocal ? fmtInt(local.shinies) : '—', local.kills ? observedRatio(local.kills, local.shinies, 'encontros') : 'sem histórico', 'gold')
-      + huntKpi('Tempo de hunt', hasLocal ? fmtDur(local.ms) : '—', hasLocal ? 'somado entre contas' : 'sem histórico')
+      + huntKpi('Tempo de hunt', hasLocal ? fmtDur(local.ms) : '—', hasLocal ? 'entre todas as contas' : 'sem histórico', '',
+          'Soma o tempo de cada conta. Duas contas caçando 1h ao mesmo tempo contam 2h.')
       + '</div>';
 
+    // ---- shiny: aparecer e capturar são dificuldades diferentes, por isso ficam separados ----
+    const brk = d.broke && typeof d.broke === 'object' ? d.broke : null;
+    const shinyPct = local.shinies ? (local.shinyCaught / local.shinies * 100) : null;
+    const brokeNum = function(v){ return v === null || v === undefined ? '—' : fmtInt(v); };
+    let brokeBlock = '';
+    if (hasLocal) {
+      const rows = brk && Array.isArray(brk.rows) ? brk.rows : [];
+      const many = rows.length > 1;
+      brokeBlock = '<div class="hl-broke">'
+        + '<div class="bt">Broke ' + hlInfo('Quantas aparições de shiny passaram até você capturar um. É uma sequência, então cada conta tem a sua e elas nunca somam.') + '</div>'
+        + '<div class="bgrid">'
+          + '<div class="max"><div class="bn">'+brokeNum(brk && brk.brokeMax)+'</div><div class="bk">Máximo</div></div>'
+          + '<div class="min"><div class="bn">'+brokeNum(brk && brk.brokeMin)+'</div><div class="bk">Mínimo</div></div>'
+          + '<div class="cur"><div class="bn">'+(many ? '—' : brokeNum(brk ? brk.streak : null))+'</div><div class="bk">Atual</div></div>'
+        + '</div>'
+        + (many ? '<div class="bacc">' + rows.map(function(r){
+            return '<div class="bar"><span class="an">'+esc(r.name || 'conta')+'</span>'
+              + '<span class="av">máx <b>'+brokeNum(r.brokeMax)+'</b> · mín <b>'+brokeNum(r.brokeMin)+'</b> · atual <b>'+fmtInt(r.streak)+'</b></span></div>';
+          }).join('') + '</div>' : '')
+        + '</div>';
+    }
+    const shinySec = hasLocal ? '<div class="hl-section hl-shiny">'
+      + '<div class="hl-section-title">✨ Shiny</div>'
+      + '<div class="hl-kpis three">'
+        + huntKpi('Apareceram', fmtInt(local.shinies), local.kills ? observedRatio(local.kills, local.shinies, 'encontros') : '', 'gold mid')
+        + huntKpi('Capturados', fmtInt(local.shinyCaught), local.shinies ? 'de '+fmtInt(local.shinies)+' tentativas' : '', 'gold mid',
+            'Só conta o shiny que o launcher viu entrar na Box. Capturas feitas com o app fechado não entram.')
+        + huntKpi('% de captura', shinyPct === null ? '—' : huntPct(shinyPct), 'quando aparece', 'mid')
+      + '</div>'
+      + brokeBlock
+      + '</div>' : '';
+
     const live = local.captureDryBalls !== null || local.dryKills !== null || local.dryBalls !== null
-      ? '<div class="hl-section"><div class="hl-section-title">Sequências atuais <small>desde o último evento ou início desta base</small></div><div class="hl-live-grid">'
+      ? '<div class="hl-section"><div class="hl-section-title">Sequências atuais '
+        + hlInfo('Conta desde o último evento registrado, ou desde o início deste histórico.') + '</div><div class="hl-live-grid">'
         + (local.captureDryBalls !== null ? '<div class="hl-live"><span class="dot"></span><span class="who">Sem capturar</span><span class="value">'+fmtInt(local.captureDryBalls)+' tentativas</span></div>' : '')
         + (local.dryKills !== null ? '<div class="hl-live"><span class="dot"></span><span class="who">Sem shiny</span><span class="value">'+fmtInt(local.dryKills)+' encontros</span></div>' : '')
         + '</div></div>' : '';
@@ -695,7 +760,8 @@
       const shortParts = [];
       if (missingMinutes) shortParts.push('cerca de '+missingMinutes+' min');
       if (missingKills) shortParts.push(missingKills+' encontros');
-      tracked = '<div class="hl-section"><div class="hl-section-title">Resumo da hunt <small>histórico registrado pelo launcher</small></div><div class="hl-grid">'
+      tracked = '<div class="hl-section"><div class="hl-section-title">Resumo da hunt '
+          + hlInfo('Somente o que o launcher observou com o app aberto, em hunts de uma espécie só.') + '</div><div class="hl-grid">'
         + '<div class="hl-panel"><div class="pt">Ritmo <span class="big">'+fmtDur(local.ms)+'</span></div>'
           + huntMetric('Encontros por hora', enoughLocalRate ? huntDec(localM.perHour.kills, 0) : '—')
           + huntMetric('Capturas por hora', enoughLocalRate ? huntDec(localM.perHour.caught, 1) : '—')
@@ -703,10 +769,8 @@
         + '</div>'
         + '<div class="hl-panel"><div class="pt">Frequências <span class="big">'+huntPct(localM.catchPct)+'</span></div>'
           + huntMetric('Captura', observedRatio(local.kills, local.caught, 'tentativas'), '', huntPct(localM.catchPct))
-          + huntMetric('Shiny aparecer', observedRatio(local.kills, local.shinies, 'encontros'), 'gold', huntPct(localM.shinyPct))
-          + huntMetric('Shinies capturados', fmtInt(local.shinyCaught), 'gold', 'dos ' + fmtInt(local.shinies) + ' que apareceram')
+          + huntMetric('Bolas gastas', fmtInt(local.thrownA + local.thrownB))
         + '</div></div>'
-        + '<div class="hl-sample-note">O jogo joga 1 bola por encontro, então cada encontro é uma tentativa de captura.</div>'
         + (!enoughLocalRate ? '<div class="hl-sample-note">Amostra curta para ritmos por hora'+(shortParts.length ? ': faltam '+shortParts.join(' e ')+'.' : '.')+'</div>' : '')
         + (coverage !== null && coverage < 99.9 ? '<div class="hl-sample-note">Atribuição por tipo de bola disponível para '+huntPct(coverage)+' das capturas.</div>' : '')
       + '</div>';
@@ -731,10 +795,13 @@
       shared = '<div class="hl-section"><div class="hl-section-title">Amostra da comunidade <small>'+contributorsTxt(cm.contributors)+'</small></div><div class="hl-compare">'
         + '<div class="hl-compare-row head"><span>Métrica</span><span>Sua hunt</span><span>Comunidade</span></div>'
         + '<div class="hl-compare-row"><span class="label">Taxa de captura</span><span class="value">'+(hasLocal ? huntPct(localM.catchPct) : '—')+'</span><span class="value community">'+huntPct(cmM.catchPct)+'</span></div>'
-        + '<div class="hl-compare-row"><span class="label">Taxa de shiny</span><span class="value">'+(hasLocal ? huntPct(localM.shinyPct) : '—')+'</span><span class="value community">'+huntPct(cmM.shinyPct)+'</span></div>'
+        + '<div class="hl-compare-row"><span class="label">✨ Chance de aparecer</span><span class="value">'+(hasLocal ? huntPct(localM.shinyPct) : '—')+'</span><span class="value community">'+huntPct(cmM.shinyPct)+'</span></div>'
+        + '<div class="hl-compare-row"><span class="label">✨ Captura do shiny</span><span class="value">'+(local.shinies ? huntPct(local.shinyCaught / local.shinies * 100) : '—')+'</span><span class="value community">'+(cm.shinies ? huntPct(numVal(cm.shiny_caught) / cm.shinies * 100) : '—')+'</span></div>'
+        + '<div class="hl-compare-row"><span class="label">✨ Broke máximo</span><span class="value">'+(brk && brk.brokeMax != null ? fmtInt(brk.brokeMax) : '—')+'</span><span class="value community">'+(cm.broke_max != null ? fmtInt(numVal(cm.broke_max)) : '—')+'</span></div>'
+        + '<div class="hl-compare-row"><span class="label">✨ Broke mínimo</span><span class="value">'+(brk && brk.brokeMin != null ? fmtInt(brk.brokeMin) : '—')+'</span><span class="value community">'+(cm.broke_min != null ? fmtInt(numVal(cm.broke_min)) : '—')+'</span></div>'
         + '<div class="hl-compare-row"><span class="label">Encontros por hora</span><span class="value">'+(local.ms ? (enoughLocalRate ? value(localM.perHour.kills, function(v){ return huntDec(v,0); }) : 'amostra curta') : '—')+'</span><span class="value community">'+(cm.ms ? (enoughCommunityRate ? value(cmM.perHour.kills, function(v){ return huntDec(v,0); }) : 'amostra curta') : '—')+'</span></div>'
         + '<div class="hl-compare-row"><span class="label">Tentativas por captura</span><span class="value">'+(hasLocal ? value(localM.ballsPerCatch, function(v){ return huntDec(v,1); }) : '—')+'</span><span class="value community">'+value(cmM.ballsPerCatch, function(v){ return huntDec(v,1); })+'</span></div>'
-      + '</div><div class="hl-sample-note">Base de '+huntApprox(cm.kills)+' encontros. '+(cm.contributors <= 1 ? 'No começo, a amostra pode vir somente desta instalação.' : 'A comunidade pode incluir os seus próprios dados se o compartilhamento estiver ativo.')+'</div></div>';
+      + '</div><div class="hl-sample-note">Base de '+huntApprox(cm.kills)+' encontros. '+(cm.contributors <= 1 ? 'No começo, a amostra pode vir somente de uma conta.' : 'A comunidade pode incluir os dados das suas próprias contas se o compartilhamento estiver ativo.')+'</div></div>';
     } else if (hasLocal) {
       shared = '<div class="hl-section"><div class="hl-section-title">Amostra da comunidade</div><div class="hl-empty local">'
         + (communityError ? 'A amostra não pôde ser consultada agora. Reabra o hub em instantes para tentar novamente.' : 'A comunidade ainda está formando uma amostra para esta espécie.')
@@ -745,7 +812,7 @@
       ? 'O launcher detectou esta espécie em uma hunt mista e não distribuiu os totais entre as espécies.'
       : 'Ainda não há histórico desta espécie.')+'</div>' : '';
     const method = '<details class="hl-method"><summary>Como estes números são calculados</summary><p>O launcher calcula as diferenças entre leituras consecutivas enquanto está aberto; totais anteriores, Bestiary e Dex do jogo não entram. Ele só atribui números à espécie quando ela é a única da hunt, ignora intervalos acima de 60 segundos e evita duplicar o mesmo personagem aberto em duas telas. Se faltar uma leitura, inicia uma nova referência em vez de estimar o trecho desconhecido. Bolas são calculadas pela queda no inventário e capturas por tipo são estimadas. A frequência shiny vem do histórico, não é uma chance oficial. A comunidade reúne anonimamente os mesmos contadores.</p></details>';
-    return head + kpis + localStatus + live + tracked + balls + shared + method;
+    return head + kpis + localStatus + shinySec + live + tracked + balls + shared + method;
   }
   function openHuntLog(sp){
     if (!sp) return;

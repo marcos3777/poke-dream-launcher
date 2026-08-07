@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.7.0",
+    "date": "2026-08-07",
+    "changes": [
+      "Novo Broke no hub de cacada: mostra quantas aparicoes de shiny passaram ate voce capturar um, com o maximo, o minimo e a sequencia atual",
+      "O Broke e contado por personagem e nunca soma entre contas — se voce tem duas contas na mesma especie, cada uma tem a sua sequencia e o hub mostra as duas separadas",
+      "Shiny ganhou secao propria no hub, com Apareceram, Capturados e a % de captura quando aparece (aparecer e capturar sao dificuldades diferentes)",
+      "Textos longos viraram um ⓘ que voce passa o mouse pra ler, deixando a tela mais limpa",
+      "A comparacao com a comunidade ganhou as metricas de shiny: chance de aparecer, % de captura e o Broke maximo e minimo"
+    ]
+  },
+  {
     "version": "1.6.1",
     "date": "2026-08-07",
     "changes": [
