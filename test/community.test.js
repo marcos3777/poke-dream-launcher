@@ -52,6 +52,7 @@ function aggregate(species = 'MrMime') {
     caught: '120',
     shinies: '3',
     shiny_caught: '1',
+    broke_avg: '6',
     broke_max: '8',
     broke_min: '3',
     thrown_a: '200',
@@ -73,6 +74,7 @@ function weightedAggregate(species = 'MrMime') {
     caught: '17.25',
     shinies: '0.1',
     shiny_caught: '0.05',
+    broke_avg: '6.5',
     broke_max: '8',
     broke_min: '3',
     thrown_a: '51.5',
@@ -139,11 +141,11 @@ test('huntLogToAccountStats separa personagens e não envia nome nem chave bruta
     MrMime: {
       accounts: {
         'id:123': {
-          name: 'Conta pessoal', seen: 3, caught: 1, streak: 0, brokeMax: 3, brokeMin: 3,
+          name: 'Conta pessoal', seen: 3, caught: 1, streak: 0, brokeMax: 3, brokeMin: 3, brokeTotal: 3, brokeCount: 1,
           stats: { kills: 20, caught: 2, shinies: 3, shinyCaught: 1, thrownA: 5, thrownB: 15, caughtA: 0.5, caughtB: 1.5, ms: 12345 },
         },
         'id:456': {
-          name: 'Outra conta', seen: 1, caught: 0, streak: 1, brokeMax: null, brokeMin: null,
+          name: 'Outra conta', seen: 1, caught: 0, streak: 1, brokeMax: null, brokeMin: null, brokeTotal: 0, brokeCount: 0,
           stats: { kills: 10, caught: 1, shinies: 1, shinyCaught: 0, thrownA: 4, thrownB: 6, caughtA: 0.4, caughtB: 0.6, ms: 5000 },
         },
       },
@@ -153,7 +155,10 @@ test('huntLogToAccountStats separa personagens e não envia nome nem chave bruta
   assert.deepEqual(Object.keys(stats), ['a'.repeat(64), 'b'.repeat(64)]);
   assert.equal(stats['a'.repeat(64)].MrMime.shiny_caught, 1);
   assert.equal(stats['a'.repeat(64)].MrMime.broke_max, 3);
-  assert.equal(stats['b'.repeat(64)].MrMime.broke_max, null);
+  assert.equal(stats['a'.repeat(64)].MrMime.broke_sum, 3);
+  assert.equal(stats['a'.repeat(64)].MrMime.broke_count, 1);
+  assert.equal(stats['b'.repeat(64)].MrMime.broke_max, 1);
+  assert.equal(stats['b'.repeat(64)].MrMime.broke_min, null);
   assert.equal(JSON.stringify(stats).includes('Conta pessoal'), false);
   assert.equal(JSON.stringify(stats).includes('id:123'), false);
 });
@@ -167,7 +172,7 @@ test('buildSubmitPayload inclui versões, identidade e revisão', () => {
     stats: {},
   });
   assert.deepEqual(payload, {
-    schema_version: 2,
+    schema_version: 3,
     app_version: '1.5.2',
     client_id: CLIENT_ID,
     client_token: CLIENT_TOKEN,
@@ -194,7 +199,7 @@ test('submitStats usa endpoint e headers públicos corretos', async () => {
   assert.equal(call.init.method, 'POST');
   assert.equal(call.init.headers.apikey, SUPABASE_PUBLISHABLE_KEY);
   assert.equal(call.init.headers['content-type'], 'application/json');
-  assert.equal(JSON.parse(call.init.body).schema_version, 2);
+  assert.equal(JSON.parse(call.init.body).schema_version, 3);
 });
 
 test('erros HTTP preservam status e código público', async () => {
@@ -236,6 +241,7 @@ test('getSpeciesStats interpreta envelope, números e cache positivo', async () 
   assert.deepEqual(first, second);
   assert.equal(first.contributors, 2);
   assert.equal(first.caught_a, 30.25);
+  assert.equal(first.broke_avg, 6);
 });
 
 test('getSpeciesStats preserva contagens ponderadas fracionárias do servidor', async () => {
@@ -246,6 +252,7 @@ test('getSpeciesStats preserva contagens ponderadas fracionárias do servidor', 
   assert.equal(stats.shinies, 0.1);
   assert.equal(stats.shiny_caught, 0.05);
   assert.equal(stats.broke_max, 8);
+  assert.equal(stats.broke_avg, 6.5);
   assert.equal(stats.caught, 17.25);
   assert.equal(stats.thrown_a, 51.5);
   assert.equal(stats.ms, 3600000.5);

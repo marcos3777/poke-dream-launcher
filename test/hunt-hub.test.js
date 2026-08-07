@@ -31,6 +31,10 @@ function community(overrides = {}) {
     kills: 10000,
     caught: 1500,
     shinies: 20,
+    shiny_caught: 4,
+    broke_avg: 6.5,
+    broke_max: 12,
+    broke_min: 2,
     thrown_a: 2000,
     thrown_b: 8000,
     caught_a: 200,
@@ -51,6 +55,7 @@ test('hub usa somente o histórico observado pelo launcher', () => {
     caught: 10,
     shinies: 12,
     shinyCaught: 3,
+    broke: { brokeAvg: 7, brokeMax: 15, brokeMin: 3, streak: 4, rows: [{ name: 'Conta', brokeAvg: 7, brokeMax: 15, brokeMin: 3, streak: 4 }] },
     thrownA: 100,
     thrownB: 700,
     caughtA: 2,
@@ -62,6 +67,8 @@ test('hub usa somente o histórico observado pelo launcher', () => {
   assert.match(output, /hl-shiny/);                       // shiny tem seção própria
   assert.match(output, /Capturados/);
   assert.match(output, /Broke/);
+  assert.match(output, /Médio/);
+  assert.match(output, /Broke médio/);
   assert.match(output, /class="hl-i"/);                   // explicação virou tooltip
   assert.match(output, /1 a cada 67 encontros/);          // 800 encontros / 12 shinies
   assert.match(output, /1 a cada 80 tentativas/);         // 800 encontros / 10 capturas

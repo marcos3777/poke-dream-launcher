@@ -2,12 +2,13 @@
 
 const SUPABASE_URL = 'https://ddjhptkpndopbondgvlv.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_yTCUuFkmqnOSf3OmHYJZXA_FMnaPmpB';
-const COMMUNITY_SCHEMA_VERSION = 2;
+const COMMUNITY_SCHEMA_VERSION = 3;
 const COMMUNITY_PREFERENCE_VERSION = 1;
 const POSITIVE_CACHE_MS = 30 * 60 * 1000;
 const NEGATIVE_CACHE_MS = 5 * 60 * 1000;
 const DEFAULT_TIMEOUT_MS = 8000;
 const MAX_COUNTER = 1_000_000_000;
+const MAX_BROKE_SUM = Number.MAX_SAFE_INTEGER;
 const MAX_HUNT_MS = 630_720_000_000;
 const MAX_ACCOUNTS = 32;
 const SPECIES_RE = /^[A-Z][A-Za-z0-9]{0,31}$/;
@@ -136,13 +137,32 @@ function huntLogToAccountStats(huntLog, accountIdForKey) {
       }
       if (kills === 0) continue;
 
-      const rawMax = account.brokeMax == null ? null : safeInteger(account.brokeMax, 1, MAX_COUNTER);
+      const rawClosedMax = account.brokeMax == null ? null : safeInteger(account.brokeMax, 1, MAX_COUNTER);
       const rawMin = account.brokeMin == null ? null : safeInteger(account.brokeMin, 1, MAX_COUNTER);
-      const hasValidBroke = shinyCaught > 0
-        && rawMax !== null
-        && rawMin !== null
-        && rawMin <= rawMax
-        && rawMax <= shinies;
+      const streak = safeInteger(account.streak ?? 0, 0, MAX_COUNTER);
+      if (streak === null) throw new CommunitySnapshotError(species);
+      const rawMax = streak > 0 && rawClosedMax !== null
+        ? Math.max(streak, rawClosedMax)
+        : (streak > 0 ? streak : rawClosedMax);
+
+      let brokeTotal = safeInteger(account.brokeTotal ?? 0, 0, MAX_BROKE_SUM);
+      let brokeCount = safeInteger(account.brokeCount ?? 0, 0, MAX_COUNTER);
+      if (brokeTotal === null || brokeCount === null) throw new CommunitySnapshotError(species);
+      if (account.brokeTotal === undefined && account.brokeCount === undefined
+        && shinyCaught === 1 && streak === 0 && rawMax !== null && rawMax === rawMin) {
+        brokeTotal = rawMax;
+        brokeCount = 1;
+      }
+      const validExtrema = (rawMax === null || rawMax <= shinies)
+        && (rawMin === null || (rawMax !== null && rawMin <= rawMax));
+      const validSamples = brokeCount === 0
+        ? brokeTotal === 0
+        : rawMax !== null
+          && rawMin !== null
+          && brokeCount <= shinyCaught
+          && brokeTotal >= rawMin * brokeCount
+          && brokeTotal <= rawMax * brokeCount;
+      if (!validExtrema || !validSamples) throw new CommunitySnapshotError(species);
 
       if (!result[accountId]) result[accountId] = {};
       result[accountId][species] = {
@@ -150,8 +170,10 @@ function huntLogToAccountStats(huntLog, accountIdForKey) {
         caught,
         shinies,
         shiny_caught: shinyCaught,
-        broke_max: hasValidBroke ? rawMax : null,
-        broke_min: hasValidBroke ? rawMin : null,
+        broke_max: rawMax,
+        broke_min: rawMin,
+        broke_sum: brokeTotal,
+        broke_count: brokeCount,
         thrown_a: thrownA,
         thrown_b: thrownB,
         caught_a: caughtA,
@@ -196,7 +218,7 @@ function parseAggregate(payload, species) {
   // Contagens agregadas podem ser fracionárias porque o servidor limita o peso de uma
   // instalação muito grande antes de somá-la à amostra.
   const numericFields = ['kills', 'caught', 'shinies', 'shiny_caught', 'thrown_a', 'thrown_b', 'caught_a', 'caught_b', 'ms'];
-  const decimalFields = ['catch_pct', 'catch_pct_a', 'catch_pct_b', 'kills_per_shiny'];
+  const decimalFields = ['catch_pct', 'catch_pct_a', 'catch_pct_b', 'kills_per_shiny', 'broke_avg'];
   const nullableIntegerFields = ['broke_max', 'broke_min'];
   const result = { species };
 

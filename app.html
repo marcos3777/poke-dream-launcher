@@ -287,12 +287,16 @@
   .hl-broke{ margin-top:9px; padding:9px 10px; border:1px solid var(--line); border-radius:10px; background:rgba(13,17,25,.55); }
   .hl-broke .bt{ display:flex; align-items:center; justify-content:center; gap:5px; margin-bottom:7px;
     color:var(--mut); font-size:8.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; }
-  .hl-broke .bgrid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; text-align:center; }
+  .hl-broke .bavg{ text-align:center; margin-bottom:8px; }
+  .hl-broke .bavg .bn{ font-size:25px; color:var(--gold); }
+  .hl-broke .bgrid{ display:grid; grid-template-columns:repeat(2,1fr); gap:8px; text-align:center; }
   .hl-broke .bn{ font-size:17px; font-weight:850; line-height:1.1; font-variant-numeric:tabular-nums; }
   .hl-broke .bk{ font-size:8.5px; color:var(--mut); font-weight:700; letter-spacing:.4px; text-transform:uppercase; }
   .hl-broke .max .bn{ color:#ff8a3d; }
   .hl-broke .min .bn{ color:#35c46a; }
   .hl-broke .cur .bn{ color:var(--gold); }
+  .hl-broke .bcur{ margin-top:6px; color:var(--mut); font-size:9px; text-align:center; }
+  .hl-broke .bcur b{ color:var(--gold); font-size:11px; }
   .hl-broke .bacc{ margin-top:8px; padding-top:7px; border-top:1px solid rgba(31,39,52,.7); }
   .hl-broke .bar{ display:flex; align-items:baseline; gap:8px; font-size:9.5px; padding:2px 1px; }
   .hl-broke .bar .an{ color:var(--txt); font-weight:700; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -673,7 +677,9 @@
       contributors:numVal(community.contributors), kills:numVal(community.kills), caught:numVal(community.caught),
       shinies:numVal(community.shinies), thrownA:numVal(community.thrown_a), thrownB:numVal(community.thrown_b),
       caughtA:numVal(community.caught_a), caughtB:numVal(community.caught_b), ms:numVal(community.ms),
-      catchPct:community.catch_pct, catchPctA:community.catch_pct_a, catchPctB:community.catch_pct_b
+      catchPct:community.catch_pct, catchPctA:community.catch_pct_a, catchPctB:community.catch_pct_b,
+      shiny_caught:numVal(community.shiny_caught), broke_avg:community.broke_avg,
+      broke_max:community.broke_max, broke_min:community.broke_min
     } : null;
     if (cm) cm.thrown = cm.thrownA + cm.thrownB;
     const localM = HM.describe(local);
@@ -716,20 +722,22 @@
     const brk = d.broke && typeof d.broke === 'object' ? d.broke : null;
     const shinyPct = local.shinies ? (local.shinyCaught / local.shinies * 100) : null;
     const brokeNum = function(v){ return v === null || v === undefined ? '—' : fmtInt(v); };
+    const brokeAvgNum = function(v){ return v === null || v === undefined ? '—' : huntDec(v, 1); };
     let brokeBlock = '';
     if (hasLocal) {
       const rows = brk && Array.isArray(brk.rows) ? brk.rows : [];
       const many = rows.length > 1;
       brokeBlock = '<div class="hl-broke">'
         + '<div class="bt">Broke ' + hlInfo('Quantas aparições de shiny passaram até você capturar um. É uma sequência, então cada conta tem a sua e elas nunca somam.') + '</div>'
+        + '<div class="bavg"><div class="bn">'+brokeAvgNum(brk && brk.brokeAvg)+'</div><div class="bk">Médio</div></div>'
         + '<div class="bgrid">'
           + '<div class="max"><div class="bn">'+brokeNum(brk && brk.brokeMax)+'</div><div class="bk">Máximo</div></div>'
           + '<div class="min"><div class="bn">'+brokeNum(brk && brk.brokeMin)+'</div><div class="bk">Mínimo</div></div>'
-          + '<div class="cur"><div class="bn">'+(many ? '—' : brokeNum(brk ? brk.streak : null))+'</div><div class="bk">Atual</div></div>'
         + '</div>'
+        + (!many && brk ? '<div class="bcur">Sequência atual: <b>'+brokeNum(brk.streak)+'</b></div>' : '')
         + (many ? '<div class="bacc">' + rows.map(function(r){
             return '<div class="bar"><span class="an">'+esc(r.name || 'conta')+'</span>'
-              + '<span class="av">máx <b>'+brokeNum(r.brokeMax)+'</b> · mín <b>'+brokeNum(r.brokeMin)+'</b> · atual <b>'+fmtInt(r.streak)+'</b></span></div>';
+              + '<span class="av">méd <b>'+brokeAvgNum(r.brokeAvg)+'</b> · máx <b>'+brokeNum(r.brokeMax)+'</b> · mín <b>'+brokeNum(r.brokeMin)+'</b> · atual <b>'+fmtInt(r.streak)+'</b></span></div>';
           }).join('') + '</div>' : '')
         + '</div>';
     }
@@ -797,6 +805,7 @@
         + '<div class="hl-compare-row"><span class="label">Taxa de captura</span><span class="value">'+(hasLocal ? huntPct(localM.catchPct) : '—')+'</span><span class="value community">'+huntPct(cmM.catchPct)+'</span></div>'
         + '<div class="hl-compare-row"><span class="label">✨ Chance de aparecer</span><span class="value">'+(hasLocal ? huntPct(localM.shinyPct) : '—')+'</span><span class="value community">'+huntPct(cmM.shinyPct)+'</span></div>'
         + '<div class="hl-compare-row"><span class="label">✨ Captura do shiny</span><span class="value">'+(local.shinies ? huntPct(local.shinyCaught / local.shinies * 100) : '—')+'</span><span class="value community">'+(cm.shinies ? huntPct(numVal(cm.shiny_caught) / cm.shinies * 100) : '—')+'</span></div>'
+        + '<div class="hl-compare-row"><span class="label">✨ Broke médio</span><span class="value">'+(brk && brk.brokeAvg != null ? huntDec(brk.brokeAvg, 1) : '—')+'</span><span class="value community">'+(cm.broke_avg != null ? huntDec(numVal(cm.broke_avg), 1) : '—')+'</span></div>'
         + '<div class="hl-compare-row"><span class="label">✨ Broke máximo</span><span class="value">'+(brk && brk.brokeMax != null ? fmtInt(brk.brokeMax) : '—')+'</span><span class="value community">'+(cm.broke_max != null ? fmtInt(numVal(cm.broke_max)) : '—')+'</span></div>'
         + '<div class="hl-compare-row"><span class="label">✨ Broke mínimo</span><span class="value">'+(brk && brk.brokeMin != null ? fmtInt(brk.brokeMin) : '—')+'</span><span class="value community">'+(cm.broke_min != null ? fmtInt(numVal(cm.broke_min)) : '—')+'</span></div>'
         + '<div class="hl-compare-row"><span class="label">Encontros por hora</span><span class="value">'+(local.ms ? (enoughLocalRate ? value(localM.perHour.kills, function(v){ return huntDec(v,0); }) : 'amostra curta') : '—')+'</span><span class="value community">'+(cm.ms ? (enoughCommunityRate ? value(cmM.perHour.kills, function(v){ return huntDec(v,0); }) : 'amostra curta') : '—')+'</span></div>'

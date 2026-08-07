@@ -5,6 +5,7 @@ const MAX_SPECIES = 300;
 const MAX_ACCOUNTS = 32;
 const MAX_COUNTER = 1_000_000_000;
 const MAX_HUNT_MS = 630_720_000_000;
+const MAX_BROKE_SUM = Number.MAX_SAFE_INTEGER;
 const SPECIES_PATTERN = /^[A-Z][A-Za-z0-9]{0,31}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43,128}$/;
@@ -19,13 +20,28 @@ const LEGACY_STAT_KEYS = [
   "caught_b",
   "ms",
 ] as const;
-const STAT_KEYS = [
+const ACCOUNT_STAT_KEYS_V2 = [
   "kills",
   "caught",
   "shinies",
   "shiny_caught",
   "broke_max",
   "broke_min",
+  "thrown_a",
+  "thrown_b",
+  "caught_a",
+  "caught_b",
+  "ms",
+] as const;
+const ACCOUNT_STAT_KEYS_V3 = [
+  "kills",
+  "caught",
+  "shinies",
+  "shiny_caught",
+  "broke_max",
+  "broke_min",
+  "broke_sum",
+  "broke_count",
   "thrown_a",
   "thrown_b",
   "caught_a",
@@ -80,8 +96,10 @@ function isSafeDecimal(value: unknown): value is number {
     && value <= MAX_COUNTER;
 }
 
-function validateStatEntry(entry: unknown, accountLevel: boolean): void {
-  const expectedKeys = accountLevel ? STAT_KEYS : LEGACY_STAT_KEYS;
+function validateStatEntry(entry: unknown, schemaVersion: number): void {
+  const expectedKeys = schemaVersion === 1
+    ? LEGACY_STAT_KEYS
+    : (schemaVersion === 2 ? ACCOUNT_STAT_KEYS_V2 : ACCOUNT_STAT_KEYS_V3);
   if (!isRecord(entry) || !hasExactKeys(entry, expectedKeys)) {
     throw new RequestError(400, "invalid_submission");
   }
@@ -110,7 +128,7 @@ function validateStatEntry(entry: unknown, accountLevel: boolean): void {
     throw new RequestError(400, "invalid_submission");
   }
 
-  if (!accountLevel) return;
+  if (schemaVersion === 1) return;
   const { shiny_caught, broke_max, broke_min } = entry;
   const validNullableBroke = (value: unknown) => value === null || isSafeCounter(value, 1);
   if (!isSafeCounter(shiny_caught)
@@ -118,10 +136,34 @@ function validateStatEntry(entry: unknown, accountLevel: boolean): void {
     || shiny_caught > caught
     || !validNullableBroke(broke_max)
     || !validNullableBroke(broke_min)
-    || ((broke_max === null) !== (broke_min === null))
-    || (shiny_caught === 0 && (broke_max !== null || broke_min !== null))
-    || (typeof broke_max === "number" && typeof broke_min === "number"
-      && (broke_min > broke_max || broke_max > shinies))) {
+    || (broke_min !== null && broke_max === null)
+    || (typeof broke_max === "number" && broke_max > shinies)
+    || (typeof broke_max === "number" && typeof broke_min === "number" && broke_min > broke_max)) {
+    throw new RequestError(400, "invalid_submission");
+  }
+
+  if (schemaVersion === 2) {
+    if (((broke_max === null) !== (broke_min === null))
+      || (shiny_caught === 0 && (broke_max !== null || broke_min !== null))) {
+      throw new RequestError(400, "invalid_submission");
+    }
+    return;
+  }
+
+  const { broke_sum, broke_count } = entry;
+  if (typeof broke_sum !== "number"
+    || !Number.isSafeInteger(broke_sum)
+    || broke_sum < 0
+    || broke_sum > MAX_BROKE_SUM
+    || !isSafeCounter(broke_count)
+    || broke_count > shiny_caught
+    || (broke_count === 0 && broke_sum !== 0)
+    || (broke_count > 0 && (broke_max === null || broke_min === null))
+    || (typeof broke_count === "number" && broke_count > 0
+      && typeof broke_sum === "number"
+      && typeof broke_max === "number"
+      && typeof broke_min === "number"
+      && (broke_sum < broke_min * broke_count || broke_sum > broke_max * broke_count))) {
     throw new RequestError(400, "invalid_submission");
   }
 }
@@ -206,7 +248,7 @@ function validatePayload(body: unknown): {
   if (!Number.isSafeInteger(revision) || (revision as number) < 1) {
     throw new RequestError(400, "invalid_submission");
   }
-  if ((schemaVersion !== 1 && schemaVersion !== 2)
+  if ((schemaVersion !== 1 && schemaVersion !== 2 && schemaVersion !== 3)
     || typeof appVersion !== "string"
     || !/^[A-Za-z0-9][A-Za-z0-9._+-]{0,31}$/.test(appVersion)) {
     throw new RequestError(400, "invalid_submission");
@@ -222,7 +264,7 @@ function validatePayload(body: unknown): {
     }
     for (const species of speciesNames) {
       if (!SPECIES_PATTERN.test(species)) throw new RequestError(400, "invalid_submission");
-      validateStatEntry(stats[species], false);
+      validateStatEntry(stats[species], 1);
     }
   } else {
     const accountIds = Object.keys(stats);
@@ -237,7 +279,7 @@ function validatePayload(body: unknown): {
       if (speciesNames.length > MAX_SPECIES) throw new RequestError(400, "invalid_submission");
       for (const species of speciesNames) {
         if (!SPECIES_PATTERN.test(species)) throw new RequestError(400, "invalid_submission");
-        validateStatEntry(accountStats[species], true);
+        validateStatEntry(accountStats[species], schemaVersion as number);
       }
     }
   }
@@ -299,7 +341,8 @@ export default {
       const payload = validatePayload(await readLimitedJson(req));
       const tokenHash = await sha256Hex(payload.clientToken);
       const sourceHash = await registrationSourceHash(req);
-      const { data, error } = await ctx.supabaseAdmin.rpc("replace_hunt_stats", {
+      const rpcName = payload.schemaVersion === 3 ? "replace_hunt_stats_v3" : "replace_hunt_stats";
+      const { data, error } = await ctx.supabaseAdmin.rpc(rpcName, {
         p_client_id: payload.clientId,
         p_token_hash: tokenHash,
         p_revision: payload.revision,

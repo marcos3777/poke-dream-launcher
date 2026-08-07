@@ -107,7 +107,24 @@
     const accounts = entry.accounts && typeof entry.accounts === 'object' && !Array.isArray(entry.accounts)
       ? entry.accounts
       : (entry.accounts = {});
-    const acc = accounts[key] || (accounts[key] = { name: '', seen: 0, caught: 0, streak: 0, brokeMax: null, brokeMin: null });
+    const acc = accounts[key] || (accounts[key] = {
+      name: '', seen: 0, caught: 0, streak: 0,
+      brokeMax: null, brokeMin: null, brokeTotal: 0, brokeCount: 0,
+    });
+    // Dados antigos não tinham soma/quantidade. Uma única captura com max=min pode ser
+    // reconstruída com exatidão; com várias capturas, a média passa a contar daqui em diante.
+    if (finiteNonNegative(acc.brokeTotal) === null || finiteNonNegative(acc.brokeCount) === null) {
+      const caught = finiteNonNegative(acc.caught) || 0;
+      const max = acc.brokeMax == null ? null : finiteNonNegative(acc.brokeMax);
+      const min = acc.brokeMin == null ? null : finiteNonNegative(acc.brokeMin);
+      if (caught === 1 && max !== null && max === min) {
+        acc.brokeTotal = max;
+        acc.brokeCount = 1;
+      } else {
+        acc.brokeTotal = 0;
+        acc.brokeCount = 0;
+      }
+    }
     if (account.name) acc.name = String(account.name);
     return acc;
   }
@@ -157,6 +174,8 @@
       const min = acc.brokeMin == null ? null : finiteNonNegative(acc.brokeMin);
       acc.brokeMax = max === null ? sample : Math.max(max, sample);
       acc.brokeMin = min === null ? sample : Math.min(min, sample);
+      acc.brokeTotal = (finiteNonNegative(acc.brokeTotal) || 0) + sample;
+      acc.brokeCount = (finiteNonNegative(acc.brokeCount) || 0) + 1;
     }
   }
 
@@ -207,13 +226,20 @@
       const seen = finiteNonNegative(a.seen) || 0;
       const caught = finiteNonNegative(a.caught) || 0;
       if (!seen && !caught) continue;
+      const streak = finiteNonNegative(a.streak) || 0;
+      const closedMax = a.brokeMax == null ? null : finiteNonNegative(a.brokeMax);
+      const brokeTotal = finiteNonNegative(a.brokeTotal) || 0;
+      const brokeCount = finiteNonNegative(a.brokeCount) || 0;
       rows.push({
         key,
         name: a.name || '',
         seen, caught,
-        streak: finiteNonNegative(a.streak) || 0,
-        brokeMax: a.brokeMax == null ? null : finiteNonNegative(a.brokeMax),
+        streak,
+        brokeMax: streak > 0 && closedMax !== null ? Math.max(streak, closedMax) : (streak > 0 ? streak : closedMax),
         brokeMin: a.brokeMin == null ? null : finiteNonNegative(a.brokeMin),
+        brokeAvg: brokeCount > 0 ? brokeTotal / brokeCount : null,
+        brokeTotal,
+        brokeCount,
         catchPct: percentage(caught, seen),
       });
     }
@@ -221,8 +247,11 @@
     rows.sort((x, y) => y.seen - x.seen);
     const maxes = rows.map((r) => r.brokeMax).filter((v) => v !== null);
     const mins = rows.map((r) => r.brokeMin).filter((v) => v !== null);
+    const brokeTotal = rows.reduce((sum, row) => sum + row.brokeTotal, 0);
+    const brokeCount = rows.reduce((sum, row) => sum + row.brokeCount, 0);
     return {
       rows,
+      brokeAvg: brokeCount > 0 ? brokeTotal / brokeCount : null,
       brokeMax: maxes.length ? Math.max(...maxes) : null,
       brokeMin: mins.length ? Math.min(...mins) : null,
       streak: rows.length === 1 ? rows[0].streak : null,   // só faz sentido com uma conta

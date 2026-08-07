@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.7.1",
+    "date": "2026-08-07",
+    "changes": [
+      "O Broke agora mostra tambem a media, alem do maximo e do minimo — com poucas capturas o maximo sozinho engana, a media da uma ideia melhor de quanto costuma custar",
+      "A media e calculada guardando a soma e a quantidade de sequencias, entao a comunidade consegue somar a media real de todo mundo em vez de tirar media de medias (que daria um numero errado)",
+      "A comparacao com a comunidade ganhou a linha do Broke medio"
+    ]
+  },
+  {
     "version": "1.7.0",
     "date": "2026-08-07",
     "changes": [

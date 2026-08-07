@@ -182,10 +182,13 @@ test('broke é sequência por conta e nunca soma entre personagens', () => {
   const b = d.rows.find((r) => r.key === 'id:bbb');
   assert.equal(a.brokeMax, 10);
   assert.equal(a.brokeMin, 4);
+  assert.equal(a.brokeAvg, 7);
   assert.equal(a.streak, 0);
-  assert.equal(b.brokeMax, null);        // ainda não capturou: sem amostra
+  assert.equal(b.brokeMax, 30);          // sequência aberta já vale como máximo provisório
+  assert.equal(b.brokeAvg, null);        // mas não entra na média antes de uma captura
   assert.equal(b.streak, 30);            // sequência corrente
-  assert.equal(d.brokeMax, 10);          // pior entre contas, não soma
+  assert.equal(d.brokeAvg, 7);
+  assert.equal(d.brokeMax, 30);          // pior entre contas, incluindo sequência aberta
   assert.equal(d.brokeMin, 4);
   assert.equal(d.streak, null);          // duas contas: sequência única não faz sentido
   assert.equal(entry.shinies, 44);       // contadores simples continuam somando
@@ -199,5 +202,6 @@ test('broke com uma única captura dá máximo igual ao mínimo', () => {
   const d = describeBroke(entry);
   assert.equal(d.brokeMax, 36);
   assert.equal(d.brokeMin, 36);
+  assert.equal(d.brokeAvg, 36);
   assert.equal(d.rows[0].catchPct, 1 / 36 * 100);
 });
